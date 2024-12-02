@@ -11,10 +11,10 @@ from src.workflow import Workflow
 class StringLengthActivity(Activity):
     def __init__(self):
         input_params = {
-            'text': ActivityParameter(name='text', type=str, required=True)
+            'text': ActivityParameter(name='text', type=str)
         }
         output_params = {
-            'length': ActivityParameter(name='length', type=int, required=True)
+            'length': ActivityParameter(name='length', type=int)
         }
         super().__init__(input_params=input_params, output_params=output_params)
     
@@ -24,10 +24,10 @@ class StringLengthActivity(Activity):
 class UppercaseActivity(Activity):
     def __init__(self):
         input_params = {
-            'text': ActivityParameter(name='text', type=str, required=True)
+            'text': ActivityParameter(name='text', type=str)
         }
         output_params = {
-            'uppercase_text': ActivityParameter(name='uppercase_text', type=str, required=True)
+            'uppercase_text': ActivityParameter(name='uppercase_text', type=str)
         }
         super().__init__(input_params=input_params, output_params=output_params)
     

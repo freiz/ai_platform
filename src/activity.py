@@ -1,14 +1,12 @@
 import uuid
-from typing import Any, Dict, Optional, Type
-from dataclasses import dataclass, field
+from typing import Any, Dict, Type, Optional
+from dataclasses import dataclass
 
 @dataclass
 class ActivityParameter:
-    """Represents a parameter for an activity with type and optional default value."""
+    """Represents a parameter for an activity with name and type."""
     name: str
     type: Type
-    default: Optional[Any] = None
-    required: bool = True
 
 class Activity:
     """
@@ -33,7 +31,6 @@ class Activity:
         self.id = str(uuid.uuid4())
         self.input_params = input_params or {}
         self.output_params = output_params or {}
-        self._validated_inputs = {}
     
     def validate_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -50,79 +47,82 @@ class Activity:
         """
         validated_inputs = {}
         
-        # Check for missing required inputs
-        for param_name, param_def in self.input_params.items():
+        # Check for missing inputs
+        for param_name, param in self.input_params.items():
             if param_name not in inputs:
-                if param_def.required:
-                    raise ValueError(f"Missing required input parameter: {param_name}")
-                elif param_def.default is not None:
-                    validated_inputs[param_name] = param_def.default
-            else:
-                # Type checking
-                input_value = inputs[param_name]
-                if not isinstance(input_value, param_def.type):
-                    try:
-                        # Attempt type conversion
-                        validated_inputs[param_name] = param_def.type(input_value)
-                    except (TypeError, ValueError):
-                        raise ValueError(f"Invalid type for parameter {param_name}. "
-                                         f"Expected {param_def.type}, got {type(input_value)}")
-                else:
-                    validated_inputs[param_name] = input_value
+                raise ValueError(f"Missing required input parameter: {param_name}")
         
-        self._validated_inputs = validated_inputs
+        # Validate input types
+        for param_name, value in inputs.items():
+            if param_name not in self.input_params:
+                raise ValueError(f"Unexpected input parameter: {param_name}")
+            
+            param = self.input_params[param_name]
+            if not isinstance(value, param.type):
+                raise ValueError(f"Invalid type for {param_name}. Expected {param.type}, got {type(value)}")
+            
+            validated_inputs[param_name] = value
+        
         return validated_inputs
     
-    def run(self, **kwargs) -> Dict[str, Any]:
+    def validate_outputs(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute the activity. To be implemented by subclasses.
+        Validate output values against defined output_params.
         
         Args:
-            **kwargs: Input parameters for the activity
+            outputs (Dict[str, Any]): Output values to validate
         
         Returns:
-            Dict[str, Any]: Output of the activity
-        """
-        raise NotImplementedError("Subclasses must implement the run method")
-    
-    def __call__(self, **kwargs) -> Dict[str, Any]:
-        """
-        Execute the activity with input validation.
-        
-        Args:
-            **kwargs: Input parameters for the activity
-        
-        Returns:
-            Dict[str, Any]: Output of the activity
-        """
-        # Validate inputs before running
-        self.validate_inputs(kwargs)
-        
-        # Execute the activity
-        outputs = self.run(**self._validated_inputs)
-        
-        # Validate outputs
-        self._validate_outputs(outputs)
-        
-        return outputs
-    
-    def _validate_outputs(self, outputs: Dict[str, Any]) -> None:
-        """
-        Validate output parameters against defined output_params.
-        
-        Args:
-            outputs (Dict[str, Any]): Outputs to validate
+            Dict[str, Any]: Validated outputs
         
         Raises:
             ValueError: If output validation fails
         """
-        for param_name, param_def in self.output_params.items():
+        validated_outputs = {}
+        
+        # Check for missing outputs
+        for param_name in self.output_params:
             if param_name not in outputs:
-                if param_def.required:
-                    raise ValueError(f"Missing required output parameter: {param_name}")
-            else:
-                # Type checking
-                output_value = outputs[param_name]
-                if not isinstance(output_value, param_def.type):
-                    raise ValueError(f"Invalid type for output parameter {param_name}. "
-                                     f"Expected {param_def.type}, got {type(output_value)}")
+                raise ValueError(f"Missing output parameter: {param_name}")
+        
+        # Validate output types
+        for param_name, value in outputs.items():
+            if param_name not in self.output_params:
+                raise ValueError(f"Unexpected output parameter: {param_name}")
+            
+            param = self.output_params[param_name]
+            if not isinstance(value, param.type):
+                raise ValueError(f"Invalid type for {param_name}. Expected {param.type}, got {type(value)}")
+            
+            validated_outputs[param_name] = value
+        
+        return validated_outputs
+    
+    def __call__(self, **inputs: Any) -> Dict[str, Any]:
+        """
+        Execute the activity with the given inputs.
+        
+        Args:
+            **inputs: Input values for the activity
+        
+        Returns:
+            Dict[str, Any]: Output values from the activity
+        """
+        validated_inputs = self.validate_inputs(inputs)
+        outputs = self.run(**validated_inputs)
+        return self.validate_outputs(outputs)
+    
+    def run(self, **inputs: Any) -> Dict[str, Any]:
+        """
+        Run the activity with validated inputs.
+        
+        Args:
+            **inputs: Validated input values
+        
+        Returns:
+            Dict[str, Any]: Output values
+        
+        Raises:
+            NotImplementedError: If the activity doesn't implement this method
+        """
+        raise NotImplementedError("Activity must implement run method")
