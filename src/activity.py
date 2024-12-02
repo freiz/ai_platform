@@ -1,12 +1,45 @@
 import uuid
-from typing import Any, Dict, Type, Optional
+from typing import Any, Dict, Optional, Literal, Union, get_args
 from dataclasses import dataclass
+
+# Define valid parameter types that map to JSON types
+ParamType = Literal["string", "number", "integer", "boolean", "array", "object"]
 
 @dataclass
 class ActivityParameter:
-    """Represents a parameter for an activity with name and type."""
+    """
+    Represents a parameter for an activity with name and JSON-compatible type.
+    
+    Attributes:
+        name: Parameter name
+        type: JSON-schema type ("string", "number", "integer", "boolean", "array", "object")
+    """
     name: str
-    type: Type
+    type: ParamType
+    
+    @staticmethod
+    def get_python_type(param_type: ParamType) -> type:
+        """Convert JSON-schema type to Python type."""
+        type_mapping = {
+            "string": str,
+            "number": float,
+            "integer": int,
+            "boolean": bool,
+            "array": list,
+            "object": dict
+        }
+        return type_mapping[param_type]
+    
+    def validate_value(self, value: Any) -> bool:
+        """Validate if a value matches the parameter type."""
+        python_type = self.get_python_type(self.type)
+        
+        if self.type == "number":
+            return isinstance(value, (int, float))
+        elif self.type == "integer":
+            return isinstance(value, int)
+        else:
+            return isinstance(value, python_type)
 
 class Activity:
     """
@@ -58,8 +91,11 @@ class Activity:
                 raise ValueError(f"Unexpected input parameter: {param_name}")
             
             param = self.input_params[param_name]
-            if not isinstance(value, param.type):
-                raise ValueError(f"Invalid type for {param_name}. Expected {param.type}, got {type(value)}")
+            if not param.validate_value(value):
+                raise ValueError(
+                    f"Invalid type for {param_name}. "
+                    f"Expected {param.type}, got {type(value).__name__}"
+                )
             
             validated_inputs[param_name] = value
         
@@ -91,8 +127,11 @@ class Activity:
                 raise ValueError(f"Unexpected output parameter: {param_name}")
             
             param = self.output_params[param_name]
-            if not isinstance(value, param.type):
-                raise ValueError(f"Invalid type for {param_name}. Expected {param.type}, got {type(value)}")
+            if not param.validate_value(value):
+                raise ValueError(
+                    f"Invalid type for {param_name}. "
+                    f"Expected {param.type}, got {type(value).__name__}"
+                )
             
             validated_outputs[param_name] = value
         

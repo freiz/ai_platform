@@ -170,9 +170,9 @@ class Workflow:
                 {
                     'name': name,
                     'class': activity.__class__.__name__,
-                    'input_params': {k: {'type': str(v.type.__name__)} 
+                    'input_params': {k: {'type': v.type}
                                      for k, v in activity.input_params.items()},
-                    'output_params': {k: {'type': str(v.type.__name__)} 
+                    'output_params': {k: {'type': v.type}
                                       for k, v in activity.output_params.items()}
                 } for name, activity in self.activities.items()
             ],

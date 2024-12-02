@@ -11,10 +11,10 @@ from src.workflow import Workflow
 class StringLengthActivity(Activity):
     def __init__(self):
         input_params = {
-            'text': ActivityParameter(name='text', type=str)
+            'text': ActivityParameter(name='text', type="string")
         }
         output_params = {
-            'length': ActivityParameter(name='length', type=int)
+            'length': ActivityParameter(name='length', type="integer")
         }
         super().__init__(input_params=input_params, output_params=output_params)
     
@@ -24,10 +24,10 @@ class StringLengthActivity(Activity):
 class UppercaseActivity(Activity):
     def __init__(self):
         input_params = {
-            'text': ActivityParameter(name='text', type=str)
+            'text': ActivityParameter(name='text', type="string")
         }
         output_params = {
-            'uppercase_text': ActivityParameter(name='uppercase_text', type=str)
+            'uppercase_text': ActivityParameter(name='uppercase_text', type="string")
         }
         super().__init__(input_params=input_params, output_params=output_params)
     
@@ -71,6 +71,9 @@ class TestWorkflow:
         
         with pytest.raises(ValueError):
             workflow.run({})  # Missing required input
+        
+        with pytest.raises(ValueError):
+            workflow.run({'text': 123})  # Wrong type (integer instead of string)
 
 if __name__ == '__main__':
     pytest.main()
