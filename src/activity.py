@@ -1,4 +1,5 @@
 import uuid
+from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Literal, Union, get_args
 from dataclasses import dataclass
 
@@ -41,12 +42,12 @@ class ActivityParameter:
         else:
             return isinstance(value, python_type)
 
-class Activity:
+class Activity(ABC):
     """
-    Base class for creating extensible activities with input and output parameters.
+    Abstract base class for creating extensible activities with input and output parameters.
     
     Attributes:
-        id (str): Unique identifier for the activity
+        name (str): Name of the activity
         input_params (Dict[str, ActivityParameter]): Input parameters for the activity
         output_params (Dict[str, ActivityParameter]): Output parameters for the activity
     """
@@ -61,9 +62,14 @@ class Activity:
             input_params (Optional[Dict[str, ActivityParameter]]): Input parameters
             output_params (Optional[Dict[str, ActivityParameter]]): Output parameters
         """
-        self.id = str(uuid.uuid4())
         self.input_params = input_params or {}
         self.output_params = output_params or {}
+    
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Abstract property that must return the activity name."""
+        pass
     
     def validate_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -151,6 +157,7 @@ class Activity:
         outputs = self.run(**validated_inputs)
         return self.validate_outputs(outputs)
     
+    @abstractmethod
     def run(self, **inputs: Any) -> Dict[str, Any]:
         """
         Run the activity with validated inputs.
@@ -160,8 +167,5 @@ class Activity:
         
         Returns:
             Dict[str, Any]: Output values
-        
-        Raises:
-            NotImplementedError: If the activity doesn't implement this method
         """
-        raise NotImplementedError("Activity must implement run method")
+        pass

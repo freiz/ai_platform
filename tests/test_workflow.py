@@ -18,6 +18,10 @@ class StringLengthActivity(Activity):
         }
         super().__init__(input_params=input_params, output_params=output_params)
     
+    @property
+    def name(self) -> str:
+        return "string_length"
+    
     def run(self, text):
         return {'length': len(text)}
 
@@ -31,6 +35,10 @@ class UppercaseActivity(Activity):
         }
         super().__init__(input_params=input_params, output_params=output_params)
     
+    @property
+    def name(self) -> str:
+        return "uppercase"
+    
     def run(self, text):
         return {'uppercase_text': text.upper()}
 
@@ -42,11 +50,11 @@ class TestWorkflow:
         
         # Create workflow
         workflow = Workflow()
-        workflow.add_activity('str_len', str_len)
-        workflow.add_activity('upper', upper)
+        workflow.add_activity(str_len.name, str_len)
+        workflow.add_activity(upper.name, upper)
         
         # Connect activities
-        workflow.connect_activities('upper', 'uppercase_text', 'str_len', 'text')
+        workflow.connect_activities(upper.name, 'uppercase_text', str_len.name, 'text')
         
         # Set input
         input_data = {'text': 'hello'}
@@ -57,17 +65,17 @@ class TestWorkflow:
     def test_workflow_serialization(self):
         workflow = Workflow()
         str_len = StringLengthActivity()
-        workflow.add_activity('str_len', str_len)
+        workflow.add_activity(str_len.name, str_len)
         
         serialized = workflow.to_dict()
         assert 'activities' in serialized
         assert len(serialized['activities']) == 1
-        assert serialized['activities'][0]['name'] == 'str_len'
+        assert serialized['activities'][0]['name'] == str_len.name
     
     def test_input_validation(self):
         workflow = Workflow()
         str_len = StringLengthActivity()
-        workflow.add_activity('str_len', str_len)
+        workflow.add_activity(str_len.name, str_len)
         
         with pytest.raises(ValueError):
             workflow.run({})  # Missing required input
