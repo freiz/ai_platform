@@ -18,6 +18,12 @@ class ActivityParameter:
     name: str
     type: ParamType
     
+    def __post_init__(self):
+        """Validate type after initialization."""
+        valid_types = set(get_args(ParamType))  # Using get_args is more explicit than __args__
+        if self.type not in valid_types:
+            raise ValueError(f"Invalid type '{self.type}'. Must be one of: {', '.join(sorted(valid_types))}")
+    
     @staticmethod
     def get_python_type(param_type: ParamType) -> type:
         """Convert JSON-schema type to Python type."""
