@@ -9,38 +9,48 @@ from src.activity import Activity, ActivityParameter
 from src.workflow import Workflow
 
 class StringLengthActivity(Activity):
-    def __init__(self):
+    def __init__(self, name: str = "string_length"):
         input_params = {
             'text': ActivityParameter(name='text', type="string")
         }
         output_params = {
             'length': ActivityParameter(name='length', type="integer")
         }
-        super().__init__(input_params=input_params, output_params=output_params)
-    
-    @property
-    def name(self) -> str:
-        return "string_length"
+        super().__init__(name=name, input_params=input_params, output_params=output_params)
     
     def run(self, text):
         return {'length': len(text)}
+    
+    def to_str(self) -> str:
+        """String representation of StringLengthActivity."""
+        return self.name
+    
+    @classmethod
+    def from_str(cls, serialized: str) -> 'Activity':
+        """Create instance from string representation."""
+        return cls(name=serialized)
 
 class UppercaseActivity(Activity):
-    def __init__(self):
+    def __init__(self, name: str = "uppercase"):
         input_params = {
             'text': ActivityParameter(name='text', type="string")
         }
         output_params = {
             'uppercase_text': ActivityParameter(name='uppercase_text', type="string")
         }
-        super().__init__(input_params=input_params, output_params=output_params)
-    
-    @property
-    def name(self) -> str:
-        return "uppercase"
+        super().__init__(name=name, input_params=input_params, output_params=output_params)
     
     def run(self, text):
         return {'uppercase_text': text.upper()}
+    
+    def to_str(self) -> str:
+        """String representation of UppercaseActivity."""
+        return self.name
+    
+    @classmethod
+    def from_str(cls, serialized: str) -> 'Activity':
+        """Create instance from string representation."""
+        return cls(name=serialized)
 
 class TestWorkflow:
     def test_workflow_execution(self):

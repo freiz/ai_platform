@@ -59,23 +59,25 @@ class Activity(ABC):
     """
     
     def __init__(self, 
+                 name: str,
                  input_params: Optional[Dict[str, ActivityParameter]] = None, 
                  output_params: Optional[Dict[str, ActivityParameter]] = None):
         """
-        Initialize an Activity with optional input and output parameters.
+        Initialize an Activity with name and optional input/output parameters.
         
         Args:
+            name (str): Name of the activity
             input_params (Optional[Dict[str, ActivityParameter]]): Input parameters
             output_params (Optional[Dict[str, ActivityParameter]]): Output parameters
         """
+        self._name = name
         self.input_params = input_params or {}
         self.output_params = output_params or {}
     
     @property
-    @abstractmethod
     def name(self) -> str:
-        """Abstract property that must return the activity name."""
-        pass
+        """Get the activity name."""
+        return self._name
     
     def validate_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """

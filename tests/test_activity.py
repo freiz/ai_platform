@@ -3,8 +3,8 @@ from src.activity import Activity, ActivityParameter, ParamType
 
 class SampleActivity(Activity):
     """A concrete implementation of Activity for testing."""
-    def __init__(self, input_params=None, output_params=None):
-        super().__init__(input_params=input_params, output_params=output_params)
+    def __init__(self, input_params=None, output_params=None, name: str = "sample_activity"):
+        super().__init__(name=name, input_params=input_params, output_params=output_params)
         # custom_prop will be set via property
         self._custom_prop = "test_value"
 
@@ -16,13 +16,21 @@ class SampleActivity(Activity):
     def custom_prop(self, value: str):
         self._custom_prop = value
 
-    @property
-    def name(self) -> str:
-        return "sample_activity"
-
     def run(self, **inputs):
         # Return a dictionary with the required 'result' parameter
         return {"result": str(inputs)}
+        
+    def to_str(self) -> str:
+        """Simple string representation for testing."""
+        return f"{self.name}:{self._custom_prop}"
+    
+    @classmethod
+    def from_str(cls, serialized: str) -> 'Activity':
+        """Create instance from string representation."""
+        name, custom_prop = serialized.split(":")
+        instance = cls(name=name)
+        instance._custom_prop = custom_prop
+        return instance
 
 
 class TestActivity(unittest.TestCase):
