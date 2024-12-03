@@ -175,3 +175,34 @@ class Activity(ABC):
             Dict[str, Any]: Output values
         """
         pass
+    
+    @abstractmethod
+    def to_str(self) -> str:
+        """
+        Serialize the activity instance to a string representation.
+        
+        This method should serialize all necessary state to recreate the activity,
+        including any custom attributes beyond the basic input/output parameters.
+        
+        Returns:
+            str: String representation of the activity
+        """
+    
+    @classmethod
+    @abstractmethod
+    def from_str(cls, serialized: str) -> 'Activity':
+        """
+        Create an activity instance from its string representation.
+        
+        This method should handle deserialization of all state that was serialized
+        by to_str, including any custom attributes.
+        
+        Args:
+            serialized (str): String representation from to_str
+            
+        Returns:
+            Activity: A new instance of the activity
+            
+        Raises:
+            ValueError: If the string representation is invalid
+        """
