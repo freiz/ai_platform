@@ -6,7 +6,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from src.activity import Activity, ActivityParameter
-from src.workflow import Workflow
+from src.workflow import Workflow, Connection
 
 class StringLengthActivity(Activity):
     def __init__(self, name: str = "string_length"):
@@ -16,19 +16,11 @@ class StringLengthActivity(Activity):
         output_params = {
             'length': ActivityParameter(name='length', type="integer")
         }
-        super().__init__(name=name, input_params=input_params, output_params=output_params)
+        super().__init__(_name=name, input_params=input_params, output_params=output_params)
     
     def run(self, text):
         return {'length': len(text)}
     
-    def to_str(self) -> str:
-        """String representation of StringLengthActivity."""
-        return self.name
-    
-    @classmethod
-    def from_str(cls, serialized: str) -> 'Activity':
-        """Create instance from string representation."""
-        return cls(name=serialized)
 
 class UppercaseActivity(Activity):
     def __init__(self, name: str = "uppercase"):
@@ -38,20 +30,11 @@ class UppercaseActivity(Activity):
         output_params = {
             'uppercase_text': ActivityParameter(name='uppercase_text', type="string")
         }
-        super().__init__(name=name, input_params=input_params, output_params=output_params)
+        super().__init__(_name=name, input_params=input_params, output_params=output_params)
     
     def run(self, text):
         return {'uppercase_text': text.upper()}
     
-    def to_str(self) -> str:
-        """String representation of UppercaseActivity."""
-        return self.name
-    
-    @classmethod
-    def from_str(cls, serialized: str) -> 'Activity':
-        """Create instance from string representation."""
-        return cls(name=serialized)
-
 class TestWorkflow:
     def test_workflow_execution(self):
         # Create activities
@@ -77,10 +60,10 @@ class TestWorkflow:
         str_len = StringLengthActivity()
         workflow.add_activity(str_len.name, str_len)
         
-        serialized = workflow.to_dict()
+        serialized = workflow.dict()
         assert 'activities' in serialized
         assert len(serialized['activities']) == 1
-        assert serialized['activities'][0]['name'] == str_len.name
+        assert str_len.name in serialized['activities']
     
     def test_input_validation(self):
         workflow = Workflow()
@@ -92,6 +75,26 @@ class TestWorkflow:
         
         with pytest.raises(ValueError):
             workflow.run({'text': 123})  # Wrong type (integer instead of string)
+    
+    def test_connection_model(self):
+        # Test creating a valid connection
+        connection = Connection(
+            source_activity_name="activity1",
+            source_output="output1",
+            target_activity_name="activity2",
+            target_input="input1"
+        )
+        assert connection.source_activity_name == "activity1"
+        assert connection.source_output == "output1"
+        assert connection.target_activity_name == "activity2"
+        assert connection.target_input == "input1"
+        
+        # Test connection serialization
+        connection_dict = connection.dict()
+        assert connection_dict["source_activity_name"] == "activity1"
+        assert connection_dict["source_output"] == "output1"
+        assert connection_dict["target_activity_name"] == "activity2"
+        assert connection_dict["target_input"] == "input1"
 
 if __name__ == '__main__':
     pytest.main()

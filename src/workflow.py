@@ -1,20 +1,36 @@
 import json
 from typing import Dict, List, Any, Optional
+from pydantic import BaseModel, Field
 from src.activity import Activity
 
-class Workflow:
+class Connection(BaseModel):
+    """
+    Represents a connection between two activities in a workflow.
+    
+    Attributes:
+        source_activity_name (str): Name of the source activity
+        source_output (str): Output parameter name of the source activity
+        target_activity_name (str): Name of the target activity
+        target_input (str): Input parameter name of the target activity
+    """
+    source_activity_name: str
+    source_output: str
+    target_activity_name: str
+    target_input: str
+
+class Workflow(BaseModel):
     """
     Represents a workflow composed of interconnected activities.
     
     Attributes:
         activities (Dict[str, Activity]): Dictionary of activities in the workflow, keyed by name
-        connections (List[Dict[str, Any]]): Connections between activities
+        connections (List[Connection]): Connections between activities
     """
+    activities: Dict[str, Activity] = Field(default_factory=dict)
+    connections: List[Connection] = Field(default_factory=list)
     
-    def __init__(self):
-        """Initialize an empty workflow."""
-        self.activities: Dict[str, Activity] = {}
-        self.connections: List[Dict[str, Any]] = []
+    class Config:
+        arbitrary_types_allowed = True
     
     def add_activity(self, name: str, activity: Activity) -> None:
         """
@@ -27,10 +43,10 @@ class Workflow:
         self.activities[name] = activity
     
     def connect_activities(self, 
-                            source_activity_name: str, 
-                            source_output: str, 
-                            target_activity_name: str, 
-                            target_input: str):
+                         source_activity_name: str, 
+                         source_output: str, 
+                         target_activity_name: str, 
+                         target_input: str):
         """
         Connect two activities by mapping an output to an input.
         
@@ -63,15 +79,15 @@ class Workflow:
         
         if source_param.type != target_param.type:
             raise ValueError(f"Type mismatch: {source_output} ({source_param.type}) "
-                             f"cannot be connected to {target_input} ({target_param.type})")
+                           f"cannot be connected to {target_input} ({target_param.type})")
         
         # Add connection
-        connection = {
-            'source_activity_name': source_activity_name,
-            'source_output': source_output,
-            'target_activity_name': target_activity_name,
-            'target_input': target_input
-        }
+        connection = Connection(
+            source_activity_name=source_activity_name,
+            source_output=source_output,
+            target_activity_name=target_activity_name,
+            target_input=target_input
+        )
         self.connections.append(connection)
     
     def run(self, initial_inputs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -101,10 +117,10 @@ class Workflow:
             
             # Check connections to fill inputs
             for connection in self.connections:
-                if connection['target_activity_name'] == activity:
-                    source_activity_name = connection['source_activity_name']
-                    source_output = connection['source_output']
-                    target_input = connection['target_input']
+                if connection.target_activity_name == activity:
+                    source_activity_name = connection.source_activity_name
+                    source_output = connection.source_output
+                    target_input = connection.target_input
                     
                     # Use output from previous activity as input
                     activity_inputs[target_input] = activity_outputs[source_activity_name][source_output]
@@ -132,8 +148,8 @@ class Workflow:
         
         # Build graph based on connections
         for connection in self.connections:
-            graph[connection['source_activity_name']].append(connection['target_activity_name'])
-            in_degree[connection['target_activity_name']] += 1
+            graph[connection.source_activity_name].append(connection.target_activity_name)
+            in_degree[connection.target_activity_name] += 1
         
         # Perform topological sort
         queue = [activity for activity in self.activities if in_degree[activity] == 0]
@@ -145,8 +161,8 @@ class Workflow:
             
             # Find connected activities
             for connection in self.connections:
-                if connection['source_activity_name'] == current_activity:
-                    target_activity = connection['target_activity_name']
+                if connection.source_activity_name == current_activity:
+                    target_activity = connection.target_activity_name
                     in_degree[target_activity] -= 1
                     
                     if in_degree[target_activity] == 0:
@@ -176,7 +192,7 @@ class Workflow:
                                       for k, v in activity.output_params.items()}
                 } for name, activity in self.activities.items()
             ],
-            'connections': self.connections
+            'connections': [connection.dict() for connection in self.connections]
         }
     
     def to_json(self) -> str:
@@ -212,12 +228,8 @@ class Workflow:
             raise NotImplementedError("Dynamic activity reconstruction not implemented")
         
         # Reconstruct connections
-        for connection in workflow_data['connections']:
-            workflow.connect_activities(
-                connection['source_activity_name'],
-                connection['source_output'],
-                connection['target_activity_name'],
-                connection['target_input']
-            )
+        for connection_data in workflow_data['connections']:
+            connection = Connection(**connection_data)
+            workflow.connections.append(connection)
         
         return workflow

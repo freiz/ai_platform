@@ -1,13 +1,12 @@
 import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Literal, Union, get_args
-from dataclasses import dataclass
+from pydantic import BaseModel, Field
 
 # Define valid parameter types that map to JSON types
 ParamType = Literal["string", "number", "integer", "boolean", "array", "object"]
 
-@dataclass
-class ActivityParameter:
+class ActivityParameter(BaseModel):
     """
     Represents a parameter for an activity with name and JSON-compatible type.
     
@@ -18,14 +17,8 @@ class ActivityParameter:
     name: str
     type: ParamType
     
-    def __post_init__(self):
-        """Validate type after initialization."""
-        valid_types = set(get_args(ParamType))  # Using get_args is more explicit than __args__
-        if self.type not in valid_types:
-            raise ValueError(f"Invalid type '{self.type}'. Must be one of: {', '.join(sorted(valid_types))}")
-    
-    @staticmethod
-    def get_python_type(param_type: ParamType) -> type:
+    @property
+    def python_type(self) -> type:
         """Convert JSON-schema type to Python type."""
         type_mapping = {
             "string": str,
@@ -35,20 +28,18 @@ class ActivityParameter:
             "array": list,
             "object": dict
         }
-        return type_mapping[param_type]
+        return type_mapping[self.type]
     
     def validate_value(self, value: Any) -> bool:
         """Validate if a value matches the parameter type."""
-        python_type = self.get_python_type(self.type)
-        
         if self.type == "number":
             return isinstance(value, (int, float))
         elif self.type == "integer":
             return isinstance(value, int)
         else:
-            return isinstance(value, python_type)
+            return isinstance(value, self.python_type)
 
-class Activity(ABC):
+class Activity(BaseModel, ABC):
     """
     Abstract base class for creating extensible activities with input and output parameters.
     
@@ -57,27 +48,13 @@ class Activity(ABC):
         input_params (Dict[str, ActivityParameter]): Input parameters for the activity
         output_params (Dict[str, ActivityParameter]): Output parameters for the activity
     """
+    name: str = Field(alias="_name")
+    input_params: Dict[str, ActivityParameter] = Field(default_factory=dict)
+    output_params: Dict[str, ActivityParameter] = Field(default_factory=dict)
     
-    def __init__(self, 
-                 name: str,
-                 input_params: Optional[Dict[str, ActivityParameter]] = None, 
-                 output_params: Optional[Dict[str, ActivityParameter]] = None):
-        """
-        Initialize an Activity with name and optional input/output parameters.
-        
-        Args:
-            name (str): Name of the activity
-            input_params (Optional[Dict[str, ActivityParameter]]): Input parameters
-            output_params (Optional[Dict[str, ActivityParameter]]): Output parameters
-        """
-        self._name = name
-        self.input_params = input_params or {}
-        self.output_params = output_params or {}
-    
-    @property
-    def name(self) -> str:
-        """Get the activity name."""
-        return self._name
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
     
     def validate_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -177,34 +154,3 @@ class Activity(ABC):
             Dict[str, Any]: Output values
         """
         pass
-    
-    @abstractmethod
-    def to_str(self) -> str:
-        """
-        Serialize the activity instance to a string representation.
-        
-        This method should serialize all necessary state to recreate the activity,
-        including any custom attributes beyond the basic input/output parameters.
-        
-        Returns:
-            str: String representation of the activity
-        """
-    
-    @classmethod
-    @abstractmethod
-    def from_str(cls, serialized: str) -> 'Activity':
-        """
-        Create an activity instance from its string representation.
-        
-        This method should handle deserialization of all state that was serialized
-        by to_str, including any custom attributes.
-        
-        Args:
-            serialized (str): String representation from to_str
-            
-        Returns:
-            Activity: A new instance of the activity
-            
-        Raises:
-            ValueError: If the string representation is invalid
-        """
