@@ -44,26 +44,16 @@ class Activity(BaseModel, ABC):
     Abstract base class for creating extensible activities with input and output parameters.
     
     Attributes:
-        name (str): Name of the activity
+        activity_name (str): Name of the activity
         input_params (Dict[str, ActivityParameter]): Input parameters for the activity
         output_params (Dict[str, ActivityParameter]): Output parameters for the activity
     """
-    name: str = Field(alias="_name")
+    activity_name: str
     input_params: Dict[str, ActivityParameter] = Field(default_factory=dict)
     output_params: Dict[str, ActivityParameter] = Field(default_factory=dict)
     
     class Config:
-        allow_population_by_field_name = True
-        populate_by_name = True
         arbitrary_types_allowed = True
-    
-    def model_dump(self, **kwargs):
-        """Override model_dump to handle name field properly"""
-        dump = super().model_dump(**kwargs)
-        # Ensure name is included in the dump
-        if '_name' in dump:
-            dump['name'] = dump.pop('_name')
-        return dump
     
     def validate_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """

@@ -4,9 +4,9 @@ from src.activity import Activity, ActivityParameter, ParamType
 
 class SampleActivity(Activity):
     """A concrete implementation of Activity for testing."""
-    def __init__(self, input_params=None, output_params=None, name: str = "sample_activity"):
+    def __init__(self, input_params=None, output_params=None, activity_name: str = "sample_activity"):
         super().__init__(
-            _name=name,  # Using _name as it's the alias
+            activity_name=activity_name,
             input_params=input_params or {},
             output_params=output_params or {}
         )
@@ -44,7 +44,7 @@ class TestActivity(unittest.TestCase):
 
     def test_activity_initialization(self):
         """Test basic activity initialization."""
-        self.assertEqual(self.activity.name, "sample_activity")
+        self.assertEqual(self.activity.activity_name, "sample_activity")
         self.assertEqual(self.activity.custom_prop, "test_value")
         self.assertEqual(len(self.activity.input_params), 2)
         self.assertEqual(len(self.activity.output_params), 1)
@@ -110,7 +110,7 @@ class TestActivity(unittest.TestCase):
         
         # Test serialization
         activity_dict = activity.model_dump()
-        self.assertEqual(activity_dict["name"], "sample_activity")
+        self.assertEqual(activity_dict["activity_name"], "sample_activity")
         self.assertEqual(activity_dict["input_params"]["text"]["name"], "text")
         self.assertEqual(activity_dict["input_params"]["text"]["type"], "string")
 
@@ -157,7 +157,7 @@ class TestActivity(unittest.TestCase):
         loaded_activity = SampleActivity.model_validate_json(json_str)
         
         # Verify the deserialized object matches the original
-        self.assertEqual(loaded_activity.name, activity.name)
+        self.assertEqual(loaded_activity.activity_name, activity.activity_name)
         self.assertEqual(len(loaded_activity.input_params), len(activity.input_params))
         self.assertEqual(len(loaded_activity.output_params), len(activity.output_params))
         

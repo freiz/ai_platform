@@ -10,28 +10,28 @@ from src.activity import Activity, ActivityParameter
 from src.workflow import Workflow, Connection
 
 class StringLengthActivity(Activity):
-    def __init__(self, name: str = "string_length"):
+    def __init__(self, activity_name: str = "string_length"):
         input_params = {
             'text': ActivityParameter(name='text', type="string")
         }
         output_params = {
             'length': ActivityParameter(name='length', type="integer")
         }
-        super().__init__(name=name, input_params=input_params, output_params=output_params)
+        super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
     
     def run(self, text):
         return {'length': len(text)}
     
 
 class UppercaseActivity(Activity):
-    def __init__(self, name: str = "uppercase"):
+    def __init__(self, activity_name: str = "uppercase"):
         input_params = {
             'text': ActivityParameter(name='text', type="string")
         }
         output_params = {
             'uppercase_text': ActivityParameter(name='uppercase_text', type="string")
         }
-        super().__init__(name=name, input_params=input_params, output_params=output_params)
+        super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
     
     def run(self, text):
         return {'uppercase_text': text.upper()}
@@ -44,11 +44,11 @@ class TestWorkflow:
         
         # Create workflow
         workflow = Workflow()
-        workflow.add_activity(str_len.name, str_len)
-        workflow.add_activity(upper.name, upper)
+        workflow.add_activity(str_len.activity_name, str_len)
+        workflow.add_activity(upper.activity_name, upper)
         
         # Connect activities
-        workflow.connect_activities(upper.name, 'uppercase_text', str_len.name, 'text')
+        workflow.connect_activities(upper.activity_name, 'uppercase_text', str_len.activity_name, 'text')
         
         # Set input
         input_data = {'text': 'hello'}
@@ -59,17 +59,17 @@ class TestWorkflow:
     def test_workflow_serialization(self):
         workflow = Workflow()
         str_len = StringLengthActivity()
-        workflow.add_activity(str_len.name, str_len)
+        workflow.add_activity(str_len.activity_name, str_len)
         
         serialized = workflow.model_dump()
         assert 'activities' in serialized
         assert len(serialized['activities']) == 1
-        assert str_len.name in serialized['activities']
+        assert str_len.activity_name in serialized['activities']
     
     def test_input_validation(self):
         workflow = Workflow()
         str_len = StringLengthActivity()
-        workflow.add_activity(str_len.name, str_len)
+        workflow.add_activity(str_len.activity_name, str_len)
         
         with pytest.raises(ValueError):
             workflow.run({})  # Missing required input
@@ -127,13 +127,13 @@ class TestWorkflow:
         # Add activities
         str_len = StringLengthActivity()
         upper = UppercaseActivity()
-        workflow.add_activity(str_len.name, str_len)
-        workflow.add_activity(upper.name, upper)
+        workflow.add_activity(str_len.activity_name, str_len)
+        workflow.add_activity(upper.activity_name, upper)
         
         # Add connection
         workflow.connect_activities(
-            upper.name, 'uppercase_text',
-            str_len.name, 'text'
+            upper.activity_name, 'uppercase_text',
+            str_len.activity_name, 'text'
         )
         
         # Test serialization to JSON
@@ -145,10 +145,10 @@ class TestWorkflow:
         # Reconstruct activities
         loaded_workflow = Workflow()
         for name, activity_data in data['activities'].items():
-            if activity_data['name'] == 'string_length':
-                activity = StringLengthActivity(name=activity_data['name'])
+            if activity_data['activity_name'] == 'string_length':
+                activity = StringLengthActivity(activity_name=activity_data['activity_name'])
             else:
-                activity = UppercaseActivity(name=activity_data['name'])
+                activity = UppercaseActivity(activity_name=activity_data['activity_name'])
             loaded_workflow.add_activity(name, activity)
         
         # Reconstruct connections
@@ -164,7 +164,7 @@ class TestWorkflow:
         assert len(loaded_workflow.activities) == len(workflow.activities)
         for name, activity in workflow.activities.items():
             loaded_activity = loaded_workflow.activities[name]
-            assert loaded_activity.name == activity.name
+            assert loaded_activity.activity_name == activity.activity_name
             assert len(loaded_activity.input_params) == len(activity.input_params)
             assert len(loaded_activity.output_params) == len(activity.output_params)
         
