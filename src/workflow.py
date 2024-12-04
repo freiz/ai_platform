@@ -35,16 +35,6 @@ class Workflow(BaseModel):
             Activity: lambda v: v.model_dump()
         }
     
-    def model_dump(self, **kwargs):
-        """Override model_dump to handle activity serialization properly"""
-        dump = super().model_dump(**kwargs)
-        # Convert activities to their serialized form
-        dump['activities'] = {
-            name: activity.model_dump()
-            for name, activity in self.activities.items()
-        }
-        return dump
-    
     def add_activity(self, name: str, activity: Activity) -> None:
         """
         Add an activity to the workflow.
@@ -187,62 +177,3 @@ class Workflow(BaseModel):
         
         return sorted_activities
     
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert the workflow to a dictionary representation.
-        
-        Returns:
-            Dict[str, Any]: Dictionary representation of the workflow
-        """
-        return {
-            'activities': [
-                {
-                    'name': name,
-                    'class': activity.__class__.__name__,
-                    'input_params': {k: {'type': v.type}
-                                     for k, v in activity.input_params.items()},
-                    'output_params': {k: {'type': v.type}
-                                      for k, v in activity.output_params.items()}
-                } for name, activity in self.activities.items()
-            ],
-            'connections': [connection.dict() for connection in self.connections]
-        }
-    
-    def to_json(self) -> str:
-        """
-        Serialize the workflow to a JSON string.
-        
-        Returns:
-            str: JSON representation of the workflow
-        """
-        return json.dumps(self.to_dict(), indent=2)
-    
-    @classmethod
-    def from_json(cls, json_str: str) -> 'Workflow':
-        """
-        Deserialize a workflow from a JSON string.
-        
-        Args:
-            json_str (str): JSON representation of the workflow
-        
-        Returns:
-            Workflow: Reconstructed workflow
-        
-        Raises:
-            ValueError: If deserialization fails
-        """
-        workflow_data = json.loads(json_str)
-        workflow = cls()
-        
-        # Reconstruct activities (Note: this requires activity classes to be imported)
-        for activity_data in workflow_data['activities']:
-            # This is a placeholder. In a real implementation, you'd need a way to 
-            # dynamically instantiate activities based on their class name
-            raise NotImplementedError("Dynamic activity reconstruction not implemented")
-        
-        # Reconstruct connections
-        for connection_data in workflow_data['connections']:
-            connection = Connection(**connection_data)
-            workflow.connections.append(connection)
-        
-        return workflow
