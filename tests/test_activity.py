@@ -109,10 +109,69 @@ class TestActivity(unittest.TestCase):
         )
         
         # Test serialization
-        activity_dict = activity.dict()
+        activity_dict = activity.model_dump()
         self.assertEqual(activity_dict["name"], "sample_activity")
-        self.assertEqual(activity_dict["input_params"]["text"].dict()["name"], "text")
-        self.assertEqual(activity_dict["input_params"]["text"].dict()["type"], "string")
+        self.assertEqual(activity_dict["input_params"]["text"]["name"], "text")
+        self.assertEqual(activity_dict["input_params"]["text"]["type"], "string")
+
+    def test_activity_parameter_serialization(self):
+        """Test ActivityParameter JSON serialization/deserialization."""
+        param = ActivityParameter(name="test_param", type="string")
+        
+        # Test serialization to JSON
+        json_str = param.model_dump_json()
+        
+        # Test deserialization from JSON
+        loaded_param = ActivityParameter.model_validate_json(json_str)
+        
+        # Verify the deserialized object matches the original
+        self.assertEqual(loaded_param.name, param.name)
+        self.assertEqual(loaded_param.type, param.type)
+        
+        # Test all parameter types
+        for param_type in ["string", "number", "integer", "boolean", "array", "object"]:
+            param = ActivityParameter(name=f"test_{param_type}", type=param_type)
+            json_str = param.model_dump_json()
+            loaded_param = ActivityParameter.model_validate_json(json_str)
+            self.assertEqual(loaded_param.type, param_type)
+
+    def test_activity_json_serialization(self):
+        """Test Activity JSON serialization/deserialization."""
+        # Create an activity with some parameters
+        input_params = {
+            "text": ActivityParameter(name="text", type="string"),
+            "count": ActivityParameter(name="count", type="integer")
+        }
+        output_params = {
+            "result": ActivityParameter(name="result", type="string")
+        }
+        activity = SampleActivity(
+            input_params=input_params,
+            output_params=output_params
+        )
+        
+        # Test serialization to JSON
+        json_str = activity.model_dump_json()
+        
+        # Test deserialization from JSON
+        loaded_activity = SampleActivity.model_validate_json(json_str)
+        
+        # Verify the deserialized object matches the original
+        self.assertEqual(loaded_activity.name, activity.name)
+        self.assertEqual(len(loaded_activity.input_params), len(activity.input_params))
+        self.assertEqual(len(loaded_activity.output_params), len(activity.output_params))
+        
+        # Check input parameters
+        for param_name, param in activity.input_params.items():
+            loaded_param = loaded_activity.input_params[param_name]
+            self.assertEqual(loaded_param.name, param.name)
+            self.assertEqual(loaded_param.type, param.type)
+        
+        # Check output parameters
+        for param_name, param in activity.output_params.items():
+            loaded_param = loaded_activity.output_params[param_name]
+            self.assertEqual(loaded_param.name, param.name)
+            self.assertEqual(loaded_param.type, param.type)
 
 if __name__ == '__main__':
     unittest.main()

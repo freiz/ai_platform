@@ -54,7 +54,16 @@ class Activity(BaseModel, ABC):
     
     class Config:
         allow_population_by_field_name = True
+        populate_by_name = True
         arbitrary_types_allowed = True
+    
+    def model_dump(self, **kwargs):
+        """Override model_dump to handle name field properly"""
+        dump = super().model_dump(**kwargs)
+        # Ensure name is included in the dump
+        if '_name' in dump:
+            dump['name'] = dump.pop('_name')
+        return dump
     
     def validate_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """

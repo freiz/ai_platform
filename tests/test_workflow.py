@@ -1,6 +1,7 @@
 import pytest
 import sys
 import os
+import json
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
@@ -16,7 +17,7 @@ class StringLengthActivity(Activity):
         output_params = {
             'length': ActivityParameter(name='length', type="integer")
         }
-        super().__init__(_name=name, input_params=input_params, output_params=output_params)
+        super().__init__(name=name, input_params=input_params, output_params=output_params)
     
     def run(self, text):
         return {'length': len(text)}
@@ -30,7 +31,7 @@ class UppercaseActivity(Activity):
         output_params = {
             'uppercase_text': ActivityParameter(name='uppercase_text', type="string")
         }
-        super().__init__(_name=name, input_params=input_params, output_params=output_params)
+        super().__init__(name=name, input_params=input_params, output_params=output_params)
     
     def run(self, text):
         return {'uppercase_text': text.upper()}
@@ -60,7 +61,7 @@ class TestWorkflow:
         str_len = StringLengthActivity()
         workflow.add_activity(str_len.name, str_len)
         
-        serialized = workflow.dict()
+        serialized = workflow.model_dump()
         assert 'activities' in serialized
         assert len(serialized['activities']) == 1
         assert str_len.name in serialized['activities']
@@ -90,11 +91,94 @@ class TestWorkflow:
         assert connection.target_input == "input1"
         
         # Test connection serialization
-        connection_dict = connection.dict()
+        connection_dict = connection.model_dump()
         assert connection_dict["source_activity_name"] == "activity1"
         assert connection_dict["source_output"] == "output1"
         assert connection_dict["target_activity_name"] == "activity2"
         assert connection_dict["target_input"] == "input1"
+
+    def test_connection_json_serialization(self):
+        """Test Connection JSON serialization/deserialization."""
+        # Create a connection
+        connection = Connection(
+            source_activity_name="source_activity",
+            source_output="output1",
+            target_activity_name="target_activity",
+            target_input="input1"
+        )
+        
+        # Test serialization to JSON
+        json_str = connection.model_dump_json()
+        
+        # Test deserialization from JSON
+        loaded_connection = Connection.model_validate_json(json_str)
+        
+        # Verify the deserialized object matches the original
+        assert loaded_connection.source_activity_name == connection.source_activity_name
+        assert loaded_connection.source_output == connection.source_output
+        assert loaded_connection.target_activity_name == connection.target_activity_name
+        assert loaded_connection.target_input == connection.target_input
+    
+    def test_workflow_json_serialization(self):
+        """Test Workflow JSON serialization/deserialization."""
+        # Create a workflow with activities and connections
+        workflow = Workflow()
+        
+        # Add activities
+        str_len = StringLengthActivity()
+        upper = UppercaseActivity()
+        workflow.add_activity(str_len.name, str_len)
+        workflow.add_activity(upper.name, upper)
+        
+        # Add connection
+        workflow.connect_activities(
+            upper.name, 'uppercase_text',
+            str_len.name, 'text'
+        )
+        
+        # Test serialization to JSON
+        json_str = workflow.model_dump_json()
+        
+        # Test deserialization from JSON
+        data = json.loads(json_str)
+        
+        # Reconstruct activities
+        loaded_workflow = Workflow()
+        for name, activity_data in data['activities'].items():
+            if activity_data['name'] == 'string_length':
+                activity = StringLengthActivity(name=activity_data['name'])
+            else:
+                activity = UppercaseActivity(name=activity_data['name'])
+            loaded_workflow.add_activity(name, activity)
+        
+        # Reconstruct connections
+        for conn_data in data['connections']:
+            loaded_workflow.connect_activities(
+                conn_data['source_activity_name'],
+                conn_data['source_output'],
+                conn_data['target_activity_name'],
+                conn_data['target_input']
+            )
+        
+        # Verify activities
+        assert len(loaded_workflow.activities) == len(workflow.activities)
+        for name, activity in workflow.activities.items():
+            loaded_activity = loaded_workflow.activities[name]
+            assert loaded_activity.name == activity.name
+            assert len(loaded_activity.input_params) == len(activity.input_params)
+            assert len(loaded_activity.output_params) == len(activity.output_params)
+        
+        # Verify connections
+        assert len(loaded_workflow.connections) == len(workflow.connections)
+        for conn, loaded_conn in zip(workflow.connections, loaded_workflow.connections):
+            assert loaded_conn.source_activity_name == conn.source_activity_name
+            assert loaded_conn.source_output == conn.source_output
+            assert loaded_conn.target_activity_name == conn.target_activity_name
+            assert loaded_conn.target_input == conn.target_input
+        
+        # Test that the loaded workflow can still execute
+        result = loaded_workflow.run({'text': 'hello'})
+        assert result['length'] == 5
 
 if __name__ == '__main__':
     pytest.main()

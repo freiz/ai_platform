@@ -31,6 +31,19 @@ class Workflow(BaseModel):
     
     class Config:
         arbitrary_types_allowed = True
+        json_encoders = {
+            Activity: lambda v: v.model_dump()
+        }
+    
+    def model_dump(self, **kwargs):
+        """Override model_dump to handle activity serialization properly"""
+        dump = super().model_dump(**kwargs)
+        # Convert activities to their serialized form
+        dump['activities'] = {
+            name: activity.model_dump()
+            for name, activity in self.activities.items()
+        }
+        return dump
     
     def add_activity(self, name: str, activity: Activity) -> None:
         """
