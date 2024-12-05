@@ -1,7 +1,7 @@
 import json
 from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
-from src.activity import Activity
+from src.activities import Activity
 
 class Connection(BaseModel):
     """

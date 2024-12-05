@@ -1,6 +1,6 @@
 import unittest
 from pydantic import ValidationError
-from src.activity import Activity, ActivityParameter, ParamType
+from src.activities import Activity, ActivityParameter, ParamType
 
 class SampleActivity(Activity):
     """A concrete implementation of Activity for testing."""

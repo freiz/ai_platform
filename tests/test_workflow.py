@@ -6,7 +6,7 @@ import json
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from src.activity import Activity, ActivityParameter
+from src.activities import Activity, ActivityParameter
 from src.workflow import Workflow, Connection
 
 class StringLengthActivity(Activity):
