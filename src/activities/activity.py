@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 # Define valid parameter types that map to JSON types
 ParamType = Literal["string", "number", "integer", "boolean", "array", "object"]
 
-class ActivityParameter(BaseModel):
+class Parameter(BaseModel):
     """
     Represents a parameter for an activity with name and JSON-compatible type.
     
@@ -22,8 +22,8 @@ class ActivityParameter(BaseModel):
     
     name: str
     type: ParamType
-    items: Optional['ActivityParameter'] = None  # Type of array items
-    properties: Optional[Dict[str, 'ActivityParameter']] = None  # Object structure
+    items: Optional['Parameter'] = None  # Type of array items
+    properties: Optional[Dict[str, 'Parameter']] = None  # Object structure
     
     @property
     def python_type(self) -> type:
@@ -66,12 +66,12 @@ class Activity(BaseModel, ABC):
     
     Attributes:
         activity_name (str): Name of the activity
-        input_params (Dict[str, ActivityParameter]): Input parameters for the activity
-        output_params (Dict[str, ActivityParameter]): Output parameters for the activity
+        input_params (Dict[str, Parameter]): Input parameters for the activity
+        output_params (Dict[str, Parameter]): Output parameters for the activity
     """
     activity_name: str
-    input_params: Dict[str, ActivityParameter] = Field(default_factory=dict)
-    output_params: Dict[str, ActivityParameter] = Field(default_factory=dict)
+    input_params: Dict[str, Parameter] = Field(default_factory=dict)
+    output_params: Dict[str, Parameter] = Field(default_factory=dict)
     
     class Config:
         arbitrary_types_allowed = True

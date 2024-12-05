@@ -6,16 +6,16 @@ import json
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from src.activities import Activity, ActivityParameter
+from src.activities import Activity, Parameter
 from src.workflow import Workflow, Connection
 
 class StringLengthActivity(Activity):
     def __init__(self, activity_name: str = "string_length"):
         input_params = {
-            'text': ActivityParameter(name='text', type="string")
+            'text': Parameter(name='text', type="string")
         }
         output_params = {
-            'length': ActivityParameter(name='length', type="integer")
+            'length': Parameter(name='length', type="integer")
         }
         super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
     
@@ -26,10 +26,10 @@ class StringLengthActivity(Activity):
 class UppercaseActivity(Activity):
     def __init__(self, activity_name: str = "uppercase"):
         input_params = {
-            'text': ActivityParameter(name='text', type="string")
+            'text': Parameter(name='text', type="string")
         }
         output_params = {
-            'uppercase_text': ActivityParameter(name='uppercase_text', type="string")
+            'uppercase_text': Parameter(name='uppercase_text', type="string")
         }
         super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
     
