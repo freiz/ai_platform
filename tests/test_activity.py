@@ -173,5 +173,190 @@ class TestActivity(unittest.TestCase):
             self.assertEqual(loaded_param.name, param.name)
             self.assertEqual(loaded_param.type, param.type)
 
+    def test_complex_parameter_validation(self):
+        """Test validation of complex parameter types (arrays and objects)."""
+        # Test list of strings
+        string_list_param = ActivityParameter(
+            name="string_list",
+            type="array",
+            items=ActivityParameter(name="item", type="string")
+        )
+        
+        # Valid cases
+        self.assertTrue(string_list_param.validate_value(["hello", "world"]))
+        self.assertTrue(string_list_param.validate_value([]))  # Empty list is valid
+        
+        # Invalid cases
+        self.assertFalse(string_list_param.validate_value([1, 2, 3]))  # Wrong item type
+        self.assertFalse(string_list_param.validate_value(["hello", 42]))  # Mixed types
+        self.assertFalse(string_list_param.validate_value("not_a_list"))  # Not a list
+        
+        # Test list of integers
+        int_list_param = ActivityParameter(
+            name="int_list",
+            type="array",
+            items=ActivityParameter(name="item", type="integer")
+        )
+        
+        self.assertTrue(int_list_param.validate_value([1, 2, 3]))
+        self.assertFalse(int_list_param.validate_value([1, "2", 3]))
+        
+        # Test nested object
+        person_param = ActivityParameter(
+            name="person",
+            type="object",
+            properties={
+                "name": ActivityParameter(name="name", type="string"),
+                "age": ActivityParameter(name="age", type="integer"),
+                "scores": ActivityParameter(
+                    name="scores",
+                    type="array",
+                    items=ActivityParameter(name="score", type="number")
+                )
+            }
+        )
+        
+        # Valid person object
+        valid_person = {
+            "name": "John",
+            "age": 30,
+            "scores": [85.5, 92.0, 88.5]
+        }
+        self.assertTrue(person_param.validate_value(valid_person))
+        
+        # Invalid person objects
+        invalid_person1 = {
+            "name": "John",
+            "age": "30",  # Wrong type for age
+            "scores": [85.5, 92.0, 88.5]
+        }
+        self.assertFalse(person_param.validate_value(invalid_person1))
+        
+        invalid_person2 = {
+            "name": "John",
+            "age": 30,
+            "scores": [85.5, "92.0", 88.5]  # Wrong type in array
+        }
+        self.assertFalse(person_param.validate_value(invalid_person2))
+
+    def test_complex_parameter_serialization(self):
+        """Test serialization and deserialization of complex parameter types."""
+        # Create a complex parameter with nested types
+        original_param = ActivityParameter(
+            name="user_data",
+            type="object",
+            properties={
+                "name": ActivityParameter(name="name", type="string"),
+                "friends": ActivityParameter(
+                    name="friends",
+                    type="array",
+                    items=ActivityParameter(
+                        name="friend",
+                        type="object",
+                        properties={
+                            "name": ActivityParameter(name="name", type="string"),
+                            "age": ActivityParameter(name="age", type="integer")
+                        }
+                    )
+                )
+            }
+        )
+        
+        # Serialize to JSON
+        json_str = original_param.model_dump_json()
+        
+        # Deserialize from JSON
+        loaded_param = ActivityParameter.model_validate_json(json_str)
+        
+        # Verify structure is preserved
+        self.assertEqual(loaded_param.name, "user_data")
+        self.assertEqual(loaded_param.type, "object")
+        self.assertIsNotNone(loaded_param.properties)
+        self.assertIn("name", loaded_param.properties)
+        self.assertIn("friends", loaded_param.properties)
+        
+        # Verify nested array type
+        friends_param = loaded_param.properties["friends"]
+        self.assertEqual(friends_param.type, "array")
+        self.assertIsNotNone(friends_param.items)
+        
+        # Verify nested object type
+        friend_param = friends_param.items
+        self.assertEqual(friend_param.type, "object")
+        self.assertIsNotNone(friend_param.properties)
+        self.assertIn("name", friend_param.properties)
+        self.assertIn("age", friend_param.properties)
+        
+        # Test validation with the deserialized parameter
+        valid_data = {
+            "name": "John",
+            "friends": [
+                {"name": "Alice", "age": 25},
+                {"name": "Bob", "age": 30}
+            ]
+        }
+        self.assertTrue(loaded_param.validate_value(valid_data))
+        
+        invalid_data = {
+            "name": "John",
+            "friends": [
+                {"name": "Alice", "age": "25"},  # Wrong type for age
+                {"name": "Bob", "age": 30}
+            ]
+        }
+        self.assertFalse(loaded_param.validate_value(invalid_data))
+
+    def test_activity_with_complex_parameters(self):
+        """Test activity with complex parameter types."""
+        # Create an activity with complex input/output parameters
+        complex_input_params = {
+            "users": ActivityParameter(
+                name="users",
+                type="array",
+                items=ActivityParameter(
+                    name="user",
+                    type="object",
+                    properties={
+                        "name": ActivityParameter(name="name", type="string"),
+                        "age": ActivityParameter(name="age", type="integer")
+                    }
+                )
+            )
+        }
+        
+        complex_output_params = {
+            "summary": ActivityParameter(
+                name="summary",
+                type="object",
+                properties={
+                    "count": ActivityParameter(name="count", type="integer"),
+                    "names": ActivityParameter(
+                        name="names",
+                        type="array",
+                        items=ActivityParameter(name="name", type="string")
+                    )
+                }
+            )
+        }
+        
+        activity = SampleActivity(
+            input_params=complex_input_params,
+            output_params=complex_output_params
+        )
+        
+        # Test serialization/deserialization of the activity
+        json_str = activity.model_dump_json()
+        loaded_activity = SampleActivity.model_validate_json(json_str)
+        
+        # Verify complex parameters are preserved
+        self.assertEqual(
+            loaded_activity.input_params["users"].items.properties["name"].type,
+            "string"
+        )
+        self.assertEqual(
+            loaded_activity.output_params["summary"].properties["names"].items.type,
+            "string"
+        )
+
 if __name__ == '__main__':
     unittest.main()

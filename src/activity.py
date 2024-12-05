@@ -13,9 +13,17 @@ class ActivityParameter(BaseModel):
     Attributes:
         name: Parameter name
         type: JSON-schema type ("string", "number", "integer", "boolean", "array", "object")
+        items: For array type, specifies the type of array items
+        properties: For object type, specifies the structure of object properties
     """
+    model_config = {
+        "exclude_none": True
+    }
+    
     name: str
     type: ParamType
+    items: Optional['ActivityParameter'] = None  # Type of array items
+    properties: Optional[Dict[str, 'ActivityParameter']] = None  # Object structure
     
     @property
     def python_type(self) -> type:
@@ -32,12 +40,25 @@ class ActivityParameter(BaseModel):
     
     def validate_value(self, value: Any) -> bool:
         """Validate if a value matches the parameter type."""
-        if self.type == "number":
-            return isinstance(value, (int, float))
-        elif self.type == "integer":
-            return isinstance(value, int)
-        else:
-            return isinstance(value, self.python_type)
+        if not isinstance(value, self.python_type):
+            if not (self.type == "number" and isinstance(value, (int, float))):
+                return False
+        
+        # Validate array items
+        if self.type == "array" and self.items is not None:
+            return all(self.items.validate_value(item) for item in value)
+        
+        # Validate object properties
+        if self.type == "object" and self.properties is not None:
+            if not isinstance(value, dict):
+                return False
+            return all(
+                prop_name in self.properties and 
+                self.properties[prop_name].validate_value(prop_value)
+                for prop_name, prop_value in value.items()
+            )
+        
+        return True
 
 class Activity(BaseModel, ABC):
     """
