@@ -9,7 +9,6 @@ from typing import Dict, Optional
 import time
 import os
 from tenacity import retry, stop_after_attempt, wait_exponential
-from openai.types.error import APIError
 
 
 class LLMConfig(BaseModel):
@@ -80,9 +79,6 @@ class LLM():
 
         Returns:
             str: The model's completion response.
-
-        Raises:
-            APIError: If there's an error during the API call.
         """
         try:
             response = openai.chat.completions.create(
@@ -99,4 +95,4 @@ class LLM():
             time.sleep(20)  # Wait before retry
             raise
         except Exception as e:
-            raise APIError(f"Error during API call: {str(e)}")
+            raise
