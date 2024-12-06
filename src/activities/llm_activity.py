@@ -2,7 +2,7 @@ import json
 from typing import Any, Dict
 
 from src.activities.activity import Activity
-from src.utils.llm import LLMConfig
+from src.utils.llm import LLMConfig, LLM
 
 
 class LLMActivity(Activity):
@@ -13,9 +13,11 @@ class LLMActivity(Activity):
         system_message = self._add_output_type()
         user_message = self._to_json(inputs)
 
-        ## Will add real implementation later, suppose we get the response from LLM
-        llm_response = 'DUMMY RESPONSE'
-        return self._parse_json(llm_response)
+        llm = LLM(self.llm_config)
+        llm_str_response = llm.complete(system_message, user_message)
+        llm_response = self._parse_json(llm_str_response)
+
+        return llm_response
 
     @staticmethod
     def _to_json(inputs: Dict[str, Any]) -> str:
