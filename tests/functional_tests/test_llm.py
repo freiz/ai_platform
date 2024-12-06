@@ -11,4 +11,5 @@ def test_call_llm():
     system_message = "You are a helpful assistant."
     user_message = "What is the capital of France?"
     response = llm.complete(system_message, user_message)
+    print(response)
     assert response

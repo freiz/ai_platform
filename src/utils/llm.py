@@ -4,11 +4,9 @@ Currently, supports OpenAI's GPT models through their API.
 """
 
 import os
-import time
 
 import openai
 from pydantic import BaseModel, Field, field_validator
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 class LLMConfig(BaseModel):
@@ -69,7 +67,6 @@ class LLM:
         result = self.completion_func(system_message, user_message)
         return result
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def _complete_openai(self, system_message: str, user_message: str) -> str:
         """Generate a completion using OpenAI's API.
 
@@ -80,19 +77,13 @@ class LLM:
         Returns:
             str: The model's completion response.
         """
-        try:
-            response = openai.chat.completions.create(
-                model=self.config.model_name,
-                messages=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=self.config.temperature,
-                top_p=self.config.top_p,
-            )
-            return response.choices[0].message.content
-        except openai.RateLimitError:
-            time.sleep(20)  # Wait before retry
-            raise
-        except Exception:
-            raise
+        response = openai.chat.completions.create(
+            model=self.config.model_name,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=self.config.temperature,
+            top_p=self.config.top_p,
+        )
+        return response.choices[0].message.content
