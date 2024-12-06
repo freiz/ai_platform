@@ -3,8 +3,10 @@ from pydantic import ValidationError
 from src.activities import Activity, Parameter, ParamType
 from typing import Any, Dict, get_args
 
+
 class SampleActivity(Activity):
     """A concrete implementation of Activity for testing."""
+
     def __init__(self):
         input_params = {
             "text": Parameter(name="text", type="string"),
@@ -25,10 +27,13 @@ class SampleActivity(Activity):
 def sample_activity():
     return SampleActivity()
 
+
 class TestActivity(Activity):
     """A concrete Activity implementation for testing."""
+
     def run(self, **inputs: Any) -> Dict[str, Any]:
         return {"result": "test"}
+
 
 def test_param_type_validation():
     """Test Parameter type validation."""
@@ -41,10 +46,12 @@ def test_param_type_validation():
     assert number_param.python_type == float
     assert number_param.type == "number"
 
+
 def test_invalid_param_type():
     """Test creating Parameter with invalid type."""
     with pytest.raises(ValidationError):
         Parameter(name="test", type="invalid_type")
+
 
 def test_valid_param_types():
     """Test all valid parameter types."""
@@ -52,8 +59,9 @@ def test_valid_param_types():
     for valid_type in valid_types:
         try:
             Parameter(name="test", type=valid_type)
-        except Exception as e:
+        except Exception:
             pytest.fail(f"Failed to create Parameter with valid type: {valid_type}")
+
 
 def test_activity_creation():
     """Test creating an activity with parameters."""
@@ -71,11 +79,12 @@ def test_activity_creation():
     assert isinstance(activity.input_params["text"], Parameter)
     assert isinstance(activity.output_params["result"], Parameter)
 
+
 def test_parameter_serialization():
     """Test Parameter JSON serialization/deserialization."""
     param = Parameter(name="test_param", type="string")
     json_str = param.model_dump_json()
-    
+
     # Test that we can deserialize the JSON back into a Parameter
     loaded_param = Parameter.model_validate_json(json_str)
     assert param.name == loaded_param.name
@@ -87,6 +96,7 @@ def test_parameter_serialization():
         json_str = param.model_dump_json()
         loaded_param = Parameter.model_validate_json(json_str)
         assert param.type == loaded_param.type
+
 
 def test_activity_validation(sample_activity):
     """Test activity input/output validation."""
@@ -108,6 +118,7 @@ def test_activity_validation(sample_activity):
     validated_outputs = sample_activity.validate_outputs(outputs)
     assert validated_outputs == outputs
 
+
 def test_array_parameter():
     """Test array parameter type with item definitions."""
     # Test string array
@@ -127,6 +138,7 @@ def test_array_parameter():
         items=Parameter(name="item", type="integer")
     )
     assert int_list_param.items.type == "integer"
+
 
 def test_object_parameter():
     """Test object parameter type with property definitions."""
@@ -157,6 +169,7 @@ def test_object_parameter():
     assert loaded_param.properties["name"].type == "string"
     assert loaded_param.properties["scores"].items.type == "number"
 
+
 def test_nested_object_array():
     """Test nested object within array parameter."""
     original_param = Parameter(
@@ -180,6 +193,7 @@ def test_nested_object_array():
     assert loaded_param.items.properties["name"].type == "string"
     assert loaded_param.items.properties["age"].type == "integer"
 
+
 def test_activity_execution(sample_activity):
     """Test activity execution with input validation."""
     # Test valid execution
@@ -194,8 +208,10 @@ def test_activity_execution(sample_activity):
     with pytest.raises(ValueError):
         sample_activity(text="hello")  # missing count
 
+
 def test_complex_activity():
     """Test activity with complex nested parameters."""
+
     class ComplexActivity(Activity):
         def __init__(self):
             input_params = {
@@ -242,13 +258,13 @@ def test_complex_activity():
             }
 
     activity = ComplexActivity()
-    
+
     # Test with valid input
     result = activity(users=[
         {"name": "Alice", "age": 30},
         {"name": "Bob", "age": 25}
     ])
-    
+
     assert result["summary"]["count"] == 2
     assert result["summary"]["names"] == ["Alice", "Bob"]
 
@@ -259,6 +275,7 @@ def test_complex_activity():
             {"name": "Bob", "age": 25}
         ])
 
+
 def test_complex_parameter_validation():
     """Test validation of complex parameter types (arrays and objects)."""
     # Test list of strings
@@ -267,23 +284,23 @@ def test_complex_parameter_validation():
         type="array",
         items=Parameter(name="item", type="string")
     )
-    
+
     # Valid cases
     assert string_list_param.validate_value(["a", "b", "c"])
     assert not string_list_param.validate_value([1, 2, 3])  # Wrong item type
     assert not string_list_param.validate_value("not_a_list")  # Not a list
-    
+
     # Test list of integers
     int_list_param = Parameter(
         name="int_list",
         type="array",
         items=Parameter(name="item", type="integer")
     )
-    
+
     assert int_list_param.validate_value([1, 2, 3])
     assert not int_list_param.validate_value([1.1, 2.2, 3.3])  # Wrong item type
     assert not int_list_param.validate_value(["1", "2", "3"])  # Wrong item type
-    
+
     # Test nested object
     person_param = Parameter(
         name="person",
@@ -298,7 +315,7 @@ def test_complex_parameter_validation():
             )
         }
     )
-    
+
     # Valid case
     valid_person = {
         "name": "John",
@@ -306,7 +323,7 @@ def test_complex_parameter_validation():
         "scores": [85.5, 92.0, 88.5]
     }
     assert person_param.validate_value(valid_person)
-    
+
     # Invalid cases
     invalid_person1 = {
         "name": 123,  # Wrong type for name
@@ -314,20 +331,21 @@ def test_complex_parameter_validation():
         "scores": [85.5, 92.0, 88.5]
     }
     assert not person_param.validate_value(invalid_person1)
-    
+
     invalid_person2 = {
         "name": "John",
         "age": "30",  # Wrong type for age
         "scores": [85.5, 92.0, 88.5]
     }
     assert not person_param.validate_value(invalid_person2)
-    
+
     invalid_person3 = {
         "name": "John",
         "age": 30,
         "scores": ["85.5", "92.0", "88.5"]  # Wrong type for scores
     }
     assert not person_param.validate_value(invalid_person3)
+
 
 def test_complex_parameter_serialization():
     """Test serialization and deserialization of complex parameter types."""
@@ -351,13 +369,13 @@ def test_complex_parameter_serialization():
             )
         }
     )
-    
+
     # Serialize to JSON
     json_str = original_param.model_dump_json()
-    
+
     # Deserialize from JSON
     loaded_param = Parameter.model_validate_json(json_str)
-    
+
     # Verify structure is preserved
     assert loaded_param.name == "user_data"
     assert loaded_param.type == "object"
@@ -366,7 +384,7 @@ def test_complex_parameter_serialization():
     assert loaded_param.properties["friends"].items.type == "object"
     assert loaded_param.properties["friends"].items.properties["name"].type == "string"
     assert loaded_param.properties["friends"].items.properties["age"].type == "integer"
-    
+
     # Test validation with the loaded parameter
     valid_data = {
         "name": "John",
@@ -376,7 +394,7 @@ def test_complex_parameter_serialization():
         ]
     }
     assert loaded_param.validate_value(valid_data)
-    
+
     invalid_data = {
         "name": "John",
         "friends": [
