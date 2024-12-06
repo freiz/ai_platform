@@ -1,10 +1,11 @@
-import uuid
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Literal, Union, get_args
+from typing import Any, Dict, Optional, Literal
+
 from pydantic import BaseModel, Field
 
 # Define valid parameter types that map to JSON types
 ParamType = Literal["string", "number", "integer", "boolean", "array", "object"]
+
 
 class Parameter(BaseModel):
     """
@@ -19,14 +20,14 @@ class Parameter(BaseModel):
     model_config = {
         "exclude_none": True
     }
-    
+
     name: str
     type: ParamType
     items: Optional['Parameter'] = None  # Type of array items
     properties: Optional[Dict[str, 'Parameter']] = None  # Object structure
-    
+
     @property
-    def python_type(self) -> type:
+    def python_type(self) -> Any:
         """Convert JSON-schema type to Python type."""
         type_mapping = {
             "string": str,
@@ -37,28 +38,29 @@ class Parameter(BaseModel):
             "object": dict
         }
         return type_mapping[self.type]
-    
+
     def validate_value(self, value: Any) -> bool:
         """Validate if a value matches the parameter type."""
         if not isinstance(value, self.python_type):
             if not (self.type == "number" and isinstance(value, (int, float))):
                 return False
-        
+
         # Validate array items
         if self.type == "array" and self.items is not None:
             return all(self.items.validate_value(item) for item in value)
-        
+
         # Validate object properties
         if self.type == "object" and self.properties is not None:
             if not isinstance(value, dict):
                 return False
             return all(
-                prop_name in self.properties and 
+                prop_name in self.properties and
                 self.properties[prop_name].validate_value(prop_value)
                 for prop_name, prop_value in value.items()
             )
-        
+
         return True
+
 
 class Activity(BaseModel, ABC):
     """
@@ -72,10 +74,10 @@ class Activity(BaseModel, ABC):
     activity_name: str
     input_params: Dict[str, Parameter] = Field(default_factory=dict)
     output_params: Dict[str, Parameter] = Field(default_factory=dict)
-    
+
     class Config:
         arbitrary_types_allowed = True
-    
+
     def validate_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Validate input parameters against defined input_params.
@@ -90,28 +92,28 @@ class Activity(BaseModel, ABC):
             ValueError: If input validation fails
         """
         validated_inputs = {}
-        
+
         # Check for missing inputs
         for param_name, param in self.input_params.items():
             if param_name not in inputs:
                 raise ValueError(f"Missing required input parameter: {param_name}")
-        
+
         # Validate input types
         for param_name, value in inputs.items():
             if param_name not in self.input_params:
                 raise ValueError(f"Unexpected input parameter: {param_name}")
-            
+
             param = self.input_params[param_name]
             if not param.validate_value(value):
                 raise ValueError(
                     f"Invalid type for {param_name}. "
                     f"Expected {param.type}, got {type(value).__name__}"
                 )
-            
+
             validated_inputs[param_name] = value
-        
+
         return validated_inputs
-    
+
     def validate_outputs(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
         """
         Validate output values against defined output_params.
@@ -126,28 +128,28 @@ class Activity(BaseModel, ABC):
             ValueError: If output validation fails
         """
         validated_outputs = {}
-        
+
         # Check for missing outputs
         for param_name in self.output_params:
             if param_name not in outputs:
                 raise ValueError(f"Missing output parameter: {param_name}")
-        
+
         # Validate output types
         for param_name, value in outputs.items():
             if param_name not in self.output_params:
                 raise ValueError(f"Unexpected output parameter: {param_name}")
-            
+
             param = self.output_params[param_name]
             if not param.validate_value(value):
                 raise ValueError(
                     f"Invalid type for {param_name}. "
                     f"Expected {param.type}, got {type(value).__name__}"
                 )
-            
+
             validated_outputs[param_name] = value
-        
+
         return validated_outputs
-    
+
     def __call__(self, **inputs: Any) -> Dict[str, Any]:
         """
         Execute the activity with the given inputs.
@@ -161,7 +163,7 @@ class Activity(BaseModel, ABC):
         validated_inputs = self.validate_inputs(inputs)
         outputs = self.run(**validated_inputs)
         return self.validate_outputs(outputs)
-    
+
     @abstractmethod
     def run(self, **inputs: Any) -> Dict[str, Any]:
         """
