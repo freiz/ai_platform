@@ -1,11 +1,9 @@
 import json
 from pydantic import BaseModel
 from src.activities.activity import Activity, Parameter, ParamType
+from src.utils.llm import LLMConfig
+from typing import Any, Dict
 
-class LLMConfig(BaseModel):
-    model_name: str
-    temperature: float
-    top_p: float 
 
 class LLMActivity(Activity):
     system_message: str
