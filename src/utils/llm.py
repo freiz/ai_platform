@@ -1,13 +1,13 @@
 """
 LLM Module for handling interactions with Large Language Models.
-Currently supports OpenAI's GPT models through their API.
+Currently, supports OpenAI's GPT models through their API.
 """
 
-from pydantic import BaseModel, Field, validator
-import openai
-from typing import Dict, Optional
-import time
 import os
+import time
+
+import openai
+from pydantic import BaseModel, Field, field_validator
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 
@@ -24,7 +24,7 @@ class LLMConfig(BaseModel):
     temperature: float = Field(ge=0.0, le=1.0)
     top_p: float = Field(ge=0.0, le=1.0)
 
-    @validator('model_name')
+    @field_validator('model_name')
     def validate_model_name(cls, v):
         valid_models = {'gpt-4o', 'gpt-4o-mini'}
         if v not in valid_models:
@@ -32,7 +32,7 @@ class LLMConfig(BaseModel):
         return v
 
 
-class LLM():
+class LLM:
     """Handler for Large Language Model interactions.
 
     Provides a unified interface for different LLM backends, currently supporting OpenAI's models.
@@ -47,13 +47,13 @@ class LLM():
             'gpt-4o': self._complete_openai,
             'gpt-4o-mini': self._complete_openai,
         }
-        
+
         if self.config.model_name not in self.supported_models:
             raise ValueError(f"Unsupported model: {self.config.model_name}")
-            
+
         if not os.environ.get('OPENAI_API_KEY'):
             raise ValueError("OPENAI_API_KEY environment variable must be set")
-            
+
         self.completion_func = self.supported_models[self.config.model_name]
 
     def complete(self, system_message: str, user_message: str) -> str:
@@ -94,5 +94,5 @@ class LLM():
         except openai.RateLimitError:
             time.sleep(20)  # Wait before retry
             raise
-        except Exception as e:
+        except Exception:
             raise
