@@ -1,4 +1,4 @@
-from src.activities import LLMActivity, Parameter, ParamType
+from src.activities import LLMActivity, Parameter
 from src.utils.llm import LLMConfig
 
 capital_finder = LLMActivity(
