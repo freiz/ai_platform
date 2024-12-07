@@ -15,6 +15,8 @@ class LLMActivity(Activity):
 
         llm = LLM(self.llm_config)
         llm_str_response = llm.complete(system_message, user_message)
+        # Only keep the JSON content, consider using regex later
+        llm_str_response = llm_str_response.replace('```', '').replace('```json', '')
         llm_response = self._parse_json(llm_str_response)
 
         return llm_response
