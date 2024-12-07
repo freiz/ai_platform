@@ -56,33 +56,56 @@ class LLMActivity(Activity):
             raise ValueError(f"Invalid JSON response: {str(e)}")
 
     def _create_output_json_schema(self) -> str:
-        # Build JSON structure
+        def _process_parameter(param, indent_level=1) -> tuple[str, str]:
+            indent = "    " * indent_level
+            json_part = ""
+            desc_part = ""
+            
+            # Handle basic type
+            if param.type not in ["array", "object"]:
+                json_part = f'<{param.type}>'
+                desc_part = f"{param.type}"
+            
+            # Handle array type
+            elif param.type == "array" and param.items is not None:
+                item_json, item_desc = _process_parameter(param.items, indent_level + 1)
+                json_part = f'[{item_json}]'
+                desc_part = f"array of {item_desc}"
+            
+            # Handle object type
+            elif param.type == "object" and param.properties is not None:
+                props_json = []
+                props_desc = []
+                
+                for prop_name, prop in param.properties.items():
+                    prop_json, prop_desc = _process_parameter(prop, indent_level + 1)
+                    props_json.append(f'{indent}    "{prop_name}": {prop_json}')
+                    props_desc.append(f"{prop_name}: {prop_desc}")
+                
+                json_part = "{\n" + ",\n".join(props_json) + f"\n{indent}}}"
+                desc_part = f"object with properties ({', '.join(props_desc)})"
+            
+            return json_part, desc_part
+
+        # Build JSON structure and parameter descriptions
         json_structure = "{\n"
         param_descriptions = []
-
+        
         for param_name, param in self.output_params.items():
+            # Process the parameter
+            param_json, param_desc = _process_parameter(param)
+            
             # Add to JSON structure
-            json_structure += f'    "{param_name}": <{param.type}>'
+            json_structure += f'    "{param_name}": {param_json}'
             if param != list(self.output_params.items())[-1][1]:  # If not last item
                 json_structure += ","
             json_structure += "\n"
-
-            # Build parameter description
-            desc = f"- {param_name}: {param.type}"
-
-            # Handle array type
-            if param.type == "array" and param.items is not None:
-                desc += f" of {param.items.type}"
-
-            # Handle object type
-            if param.type == "object" and param.properties is not None:
-                props = [f"{k}: {v.type}" for k, v in param.properties.items()]
-                desc += f" with properties ({', '.join(props)})"
-
-            param_descriptions.append(desc)
-
+            
+            # Add to parameter descriptions
+            param_descriptions.append(f"- {param_name}: {param_desc}")
+        
         json_structure += "}"
-
+        
         return json_structure
 
     def _add_output_type(self) -> str:
