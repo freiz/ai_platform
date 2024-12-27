@@ -156,3 +156,16 @@ def test_llm_activity_registration():
     assert isinstance(activity_json.input_params["country"], Parameter)
     assert "capital" in activity_json.output_params
     assert isinstance(activity_json.output_params["capital"], Parameter)
+
+
+def test_activity_type_info_serialization():
+    """Test ActivityTypeInfo serialization with automatic activity_type exclusion."""
+    registry = ActivityRegistry()
+
+    # Get a simple activity type from registry
+    info = registry.get_activity_type("string_length")
+
+    # Serialize to JSON (activity_type should be automatically excluded)
+    json_str = info.model_dump_json()
+
+    print(json_str)

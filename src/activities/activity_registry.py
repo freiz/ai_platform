@@ -1,6 +1,6 @@
 from typing import Dict, Type, Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.activities.activity import Activity, Parameter
 
@@ -18,8 +18,12 @@ class ActivityTypeInfo(BaseModel):
         fixed_output_params: If set, all instances must use these output parameters
         allow_custom_params: If True, input/output params can be defined per instance
     """
+    model_config = {
+        'arbitrary_types_allowed': True,
+    }
+
     activity_type_name: str
-    activity_type: Type[Activity]
+    activity_type: Type[Activity] = Field(exclude=True)
     required_params: Dict[str, Parameter]
     description: str
     fixed_input_params: Optional[Dict[str, Parameter]] = None
@@ -136,8 +140,8 @@ class ActivityRegistry:
 
     @classmethod
     def create_activity(cls,
-                       activity_type_name: str,
-                       params: Dict[str, Any]) -> Activity:
+                        activity_type_name: str,
+                        params: Dict[str, Any]) -> Activity:
         """
         Create an instance of a registered activity type.
         
@@ -195,11 +199,11 @@ class ActivityRegistry:
         return info.activity_type(**params)
 
     @classmethod
-    def register_activity(cls, 
-                        activity_type_name: str,
-                        description: str,
-                        required_params: Optional[Dict[str, Parameter]] = None,
-                        allow_custom_params: bool = False):
+    def register_activity(cls,
+                          activity_type_name: str,
+                          description: str,
+                          required_params: Optional[Dict[str, Parameter]] = None,
+                          allow_custom_params: bool = False):
         """
         Class decorator for registering activities.
         
@@ -212,6 +216,7 @@ class ActivityRegistry:
         Returns:
             The decorated activity class
         """
+
         def decorator(activity_cls: Type[Activity]):
             # Store registration info on the class itself
             activity_cls._registration_info = {
@@ -223,14 +228,16 @@ class ActivityRegistry:
                 "allow_custom_params": allow_custom_params
             }
             return activity_cls
+
         return decorator
 
     @classmethod
     def register_class(cls, activity_cls: Type[Activity]):
         """Register an activity class using its stored registration info."""
         if not hasattr(activity_cls, '_registration_info'):
-            raise ValueError(f"Class {activity_cls.__name__} has no registration info. Did you forget the @register_activity decorator?")
-        
+            raise ValueError(
+                f"Class {activity_cls.__name__} has no registration info. Did you forget the @register_activity decorator?")
+
         info = activity_cls._registration_info
         cls.register(
             activity_name=info["activity_type_name"],
