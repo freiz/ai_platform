@@ -10,6 +10,7 @@ class ActivityTypeInfo(BaseModel):
     Information about an activity type that can be used to create instances.
     
     Attributes:
+        activity_type_name: The unique name of this activity type
         activity_type: The actual activity class
         required_params: Additional parameters required to instantiate the activity
         description: Human-readable description of what the activity does
@@ -17,6 +18,7 @@ class ActivityTypeInfo(BaseModel):
         fixed_output_params: If set, all instances must use these output parameters
         allow_custom_params: If True, input/output params can be defined per instance
     """
+    activity_type_name: str
     activity_type: Type[Activity]
     required_params: Dict[str, Parameter]
     description: str
@@ -94,6 +96,7 @@ class ActivityRegistry:
                 fixed_output_params = fixed_output_params or dummy_instance.output_params
 
         cls._registry[activity_name] = ActivityTypeInfo(
+            activity_type_name=activity_name,
             activity_type=activity_type,
             required_params=required_params,
             description=description,
@@ -112,6 +115,24 @@ class ActivityRegistry:
             Dictionary mapping activity type names to their ActivityTypeInfo objects
         """
         return cls._registry
+
+    @classmethod
+    def get_activity_type(cls, activity_type_name: str) -> ActivityTypeInfo:
+        """
+        Get activity type info for a specific activity type.
+        
+        Args:
+            activity_type_name: Name of the registered activity type
+            
+        Returns:
+            ActivityTypeInfo for the requested activity type
+            
+        Raises:
+            ValueError: If activity type not found
+        """
+        if activity_type_name not in cls._registry:
+            raise ValueError(f"Activity type {activity_type_name} not found")
+        return cls._registry[activity_type_name]
 
     @classmethod
     def create_activity(cls,

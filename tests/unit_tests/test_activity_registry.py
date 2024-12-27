@@ -31,8 +31,7 @@ def test_fixed_params_activity():
     registry = ActivityRegistry()
 
     # Get activity type info (already registered via decorator)
-    activity_types = registry.get_activity_types()
-    info = activity_types["string_length"]
+    info = registry.get_activity_type("string_length")
 
     # Verify fixed parameters are exposed
     assert info.fixed_input_params is not None
@@ -64,8 +63,7 @@ def test_custom_params_activity():
     registry = ActivityRegistry()
 
     # Get activity type info (already registered via decorator)
-    activity_types = registry.get_activity_types()
-    info = activity_types["custom_params"]
+    info = registry.get_activity_type("custom_params")
 
     # Verify parameters are not fixed
     assert info.fixed_input_params is None
@@ -96,8 +94,7 @@ def test_llm_activity_registration():
     registry = ActivityRegistry()
 
     # Get activity type info (already registered via decorator)
-    activity_types = registry.get_activity_types()
-    info = activity_types["llm_activity"]
+    info = registry.get_activity_type("llm_activity")
 
     # Verify parameters are customizable
     assert info.fixed_input_params is None
