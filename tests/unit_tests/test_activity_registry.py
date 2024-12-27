@@ -35,11 +35,11 @@ def test_fixed_params_activity():
     info = activity_types["string_length"]
 
     # Verify fixed parameters are exposed
-    assert info["input_params"] is not None
-    assert "text" in info["input_params"]
-    assert info["output_params"] is not None
-    assert "length" in info["output_params"]
-    assert not info["allow_custom_params"]
+    assert info.fixed_input_params is not None
+    assert "text" in info.fixed_input_params
+    assert info.fixed_output_params is not None
+    assert "length" in info.fixed_output_params
+    assert not info.allow_custom_params
 
     # Create and test instance
     activity = registry.create_activity(
@@ -68,9 +68,9 @@ def test_custom_params_activity():
     info = activity_types["custom_params"]
 
     # Verify parameters are not fixed
-    assert info["input_params"] is None
-    assert info["output_params"] is None
-    assert info["allow_custom_params"]
+    assert info.fixed_input_params is None
+    assert info.fixed_output_params is None
+    assert info.allow_custom_params
 
     # Create and test instance with custom parameters
     activity = registry.create_activity(
@@ -100,9 +100,9 @@ def test_llm_activity_registration():
     info = activity_types["llm_activity"]
 
     # Verify parameters are customizable
-    assert info["input_params"] is None
-    assert info["output_params"] is None
-    assert info["allow_custom_params"]
+    assert info.fixed_input_params is None
+    assert info.fixed_output_params is None
+    assert info.allow_custom_params
 
     # Create an instance (capital finder) using Parameter objects
     activity = registry.create_activity(

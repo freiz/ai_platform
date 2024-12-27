@@ -103,39 +103,15 @@ class ActivityRegistry:
         )
 
     @classmethod
-    def get_activity_types(cls) -> Dict[str, Dict[str, Any]]:
+    def get_activity_types(cls) -> Dict[str, ActivityTypeInfo]:
         """
         Get all registered activity types and their metadata.
         Used by the API to expose available activity types.
         
         Returns:
-            Dictionary of activity type information including:
-            - input_params: Fixed input parameters or None if customizable
-            - output_params: Fixed output parameters or None if customizable
-            - required_params: Parameters needed to instantiate the activity
-            - description: Human-readable description
-            - allow_custom_params: Whether input/output params can be customized
+            Dictionary mapping activity type names to their ActivityTypeInfo objects
         """
-        result = {}
-        for name, info in cls._registry.items():
-            result[name] = {
-                "input_params": {
-                    name: param.model_dump()
-                    for name, param in (info.fixed_input_params or {}).items()
-                } if info.fixed_input_params is not None else None,
-                "output_params": {
-                    name: param.model_dump()
-                    for name, param in (info.fixed_output_params or {}).items()
-                } if info.fixed_output_params is not None else None,
-                "required_params": {
-                    name: param.model_dump()
-                    for name, param in info.required_params.items()
-                },
-                "description": info.description,
-                "allow_custom_params": info.allow_custom_params
-            }
-
-        return result
+        return cls._registry
 
     @classmethod
     def create_activity(cls,
