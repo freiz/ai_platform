@@ -14,8 +14,6 @@ class ActivityTypeInfo(BaseModel):
         activity_type: The actual activity class
         required_params: Additional parameters required to instantiate the activity
         description: Human-readable description of what the activity does
-        fixed_input_params: If set, all instances must use these input parameters
-        fixed_output_params: If set, all instances must use these output parameters
         allow_custom_params: If True, input/output params can be defined per instance
     """
     model_config = {
@@ -26,8 +24,6 @@ class ActivityTypeInfo(BaseModel):
     activity_type: Type[Activity] = Field(exclude=True)
     required_params: Dict[str, Parameter]
     description: str
-    fixed_input_params: Optional[Dict[str, Parameter]] = None
-    fixed_output_params: Optional[Dict[str, Parameter]] = None
     allow_custom_params: bool = False
 
 
@@ -72,8 +68,6 @@ class ActivityRegistry:
                  activity_type: Type[Activity],
                  required_params: Dict[str, Parameter],
                  description: str,
-                 fixed_input_params: Optional[Dict[str, Parameter]] = None,
-                 fixed_output_params: Optional[Dict[str, Parameter]] = None,
                  allow_custom_params: bool = False) -> None:
         """
         Register a new activity type.
@@ -83,65 +77,23 @@ class ActivityRegistry:
             activity_type: The activity class
             required_params: Parameters required to instantiate the activity
             description: Human-readable description of the activity
-            fixed_input_params: If set, all instances must use these input parameters
-            fixed_output_params: If set, all instances must use these output parameters
             allow_custom_params: If True, input/output params can be defined per instance
         """
         if activity_name in cls._registry:
             raise ValueError(f"Activity type {activity_name} already registered")
-
-        # If custom params aren't allowed, either fixed params must be provided
-        # or the activity class must have default params
-        if not allow_custom_params:
-            if fixed_input_params is None or fixed_output_params is None:
-                # Create a dummy instance to get default params
-                dummy_instance = activity_type()
-                fixed_input_params = fixed_input_params or dummy_instance.input_params
-                fixed_output_params = fixed_output_params or dummy_instance.output_params
 
         cls._registry[activity_name] = ActivityTypeInfo(
             activity_type_name=activity_name,
             activity_type=activity_type,
             required_params=required_params,
             description=description,
-            fixed_input_params=fixed_input_params,
-            fixed_output_params=fixed_output_params,
             allow_custom_params=allow_custom_params
         )
 
     @classmethod
-    def get_activity_types(cls) -> Dict[str, ActivityTypeInfo]:
-        """
-        Get all registered activity types and their metadata.
-        Used by the API to expose available activity types.
-        
-        Returns:
-            Dictionary mapping activity type names to their ActivityTypeInfo objects
-        """
-        return cls._registry
-
-    @classmethod
-    def get_activity_type(cls, activity_type_name: str) -> ActivityTypeInfo:
-        """
-        Get activity type info for a specific activity type.
-        
-        Args:
-            activity_type_name: Name of the registered activity type
-            
-        Returns:
-            ActivityTypeInfo for the requested activity type
-            
-        Raises:
-            ValueError: If activity type not found
-        """
-        if activity_type_name not in cls._registry:
-            raise ValueError(f"Activity type {activity_type_name} not found")
-        return cls._registry[activity_type_name]
-
-    @classmethod
     def create_activity(cls,
-                        activity_type_name: str,
-                        params: Dict[str, Any]) -> Activity:
+                       activity_type_name: str,
+                       params: Dict[str, Any]) -> Activity:
         """
         Create an instance of a registered activity type.
         
@@ -185,25 +137,46 @@ class ActivityRegistry:
             # For fixed parameter activities, don't pass input/output params to constructor
             creation_params = {k: v for k, v in params.items()
                                if k not in ['input_params', 'output_params']}
-            instance = info.activity_type(**creation_params)
-
-            # Verify the instance has the expected fixed parameters
-            if info.fixed_input_params:
-                assert instance.input_params == info.fixed_input_params
-            if info.fixed_output_params:
-                assert instance.output_params == info.fixed_output_params
-
-            return instance
+            return info.activity_type(**creation_params)
 
         # For customizable parameter activities, pass all params
         return info.activity_type(**params)
 
     @classmethod
-    def register_activity(cls,
-                          activity_type_name: str,
-                          description: str,
-                          required_params: Optional[Dict[str, Parameter]] = None,
-                          allow_custom_params: bool = False):
+    def get_activity_types(cls) -> Dict[str, ActivityTypeInfo]:
+        """
+        Get all registered activity types and their metadata.
+        Used by the API to expose available activity types.
+        
+        Returns:
+            Dictionary mapping activity type names to their ActivityTypeInfo objects
+        """
+        return cls._registry
+
+    @classmethod
+    def get_activity_type(cls, activity_type_name: str) -> ActivityTypeInfo:
+        """
+        Get activity type info for a specific activity type.
+        
+        Args:
+            activity_type_name: Name of the registered activity type
+            
+        Returns:
+            ActivityTypeInfo for the requested activity type
+            
+        Raises:
+            ValueError: If activity type not found
+        """
+        if activity_type_name not in cls._registry:
+            raise ValueError(f"Activity type {activity_type_name} not found")
+        return cls._registry[activity_type_name]
+
+    @classmethod
+    def register_activity(cls, 
+                        activity_type_name: str,
+                        description: str,
+                        required_params: Optional[Dict[str, Parameter]] = None,
+                        allow_custom_params: bool = False):
         """
         Class decorator for registering activities.
         
@@ -216,7 +189,6 @@ class ActivityRegistry:
         Returns:
             The decorated activity class
         """
-
         def decorator(activity_cls: Type[Activity]):
             # Store registration info on the class itself
             activity_cls._registration_info = {
@@ -228,7 +200,6 @@ class ActivityRegistry:
                 "allow_custom_params": allow_custom_params
             }
             return activity_cls
-
         return decorator
 
     @classmethod
@@ -236,8 +207,9 @@ class ActivityRegistry:
         """Register an activity class using its stored registration info."""
         if not hasattr(activity_cls, '_registration_info'):
             raise ValueError(
-                f"Class {activity_cls.__name__} has no registration info. Did you forget the @register_activity decorator?")
-
+                f"Class {activity_cls.__name__} has no registration info. Did you forget the @register_activity decorator?"
+            )
+        
         info = activity_cls._registration_info
         cls.register(
             activity_name=info["activity_type_name"],

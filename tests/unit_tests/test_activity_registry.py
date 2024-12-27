@@ -33,11 +33,7 @@ def test_fixed_params_activity():
     # Get activity type info (already registered via decorator)
     info = registry.get_activity_type("string_length")
 
-    # Verify fixed parameters are exposed
-    assert info.fixed_input_params is not None
-    assert "text" in info.fixed_input_params
-    assert info.fixed_output_params is not None
-    assert "length" in info.fixed_output_params
+    # Verify activity doesn't allow custom params
     assert not info.allow_custom_params
 
     # Create and test instance
@@ -65,9 +61,7 @@ def test_custom_params_activity():
     # Get activity type info (already registered via decorator)
     info = registry.get_activity_type("custom_params")
 
-    # Verify parameters are not fixed
-    assert info.fixed_input_params is None
-    assert info.fixed_output_params is None
+    # Verify activity allows custom params
     assert info.allow_custom_params
 
     # Create and test instance with custom parameters
@@ -97,8 +91,6 @@ def test_llm_activity_registration():
     info = registry.get_activity_type("llm_activity")
 
     # Verify parameters are customizable
-    assert info.fixed_input_params is None
-    assert info.fixed_output_params is None
     assert info.allow_custom_params
 
     # Create an instance (capital finder) using Parameter objects
@@ -163,7 +155,7 @@ def test_activity_type_info_serialization():
     registry = ActivityRegistry()
 
     # Get a simple activity type from registry
-    info = registry.get_activity_type("string_length")
+    info = registry.get_activity_type("llm_activity")
 
     # Serialize to JSON (activity_type should be automatically excluded)
     json_str = info.model_dump_json()
