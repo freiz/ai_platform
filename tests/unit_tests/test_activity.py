@@ -405,3 +405,113 @@ def test_complex_parameter_serialization():
         ]
     }
     assert not loaded_param.validate_value(invalid_data)
+
+
+def test_parameter_model_serialization():
+    """Test Parameter model serialization with various types and structures."""
+    # Test basic types
+    basic_params = [
+        Parameter(name="string_param", type="string"),
+        Parameter(name="int_param", type="integer"),
+        Parameter(name="number_param", type="number"),
+        Parameter(name="bool_param", type="boolean"),
+    ]
+
+    for param in basic_params:
+        json_str = param.model_dump_json()
+        loaded_param = Parameter.model_validate_json(json_str)
+        assert loaded_param.model_dump() == param.model_dump()
+
+    # Test array parameters
+    array_params = [
+        Parameter(
+            name="string_array",
+            type="array",
+            items=Parameter(name="item", type="string")
+        ),
+        Parameter(
+            name="number_array",
+            type="array",
+            items=Parameter(name="item", type="number")
+        ),
+    ]
+
+    for param in array_params:
+        json_str = param.model_dump_json()
+        loaded_param = Parameter.model_validate_json(json_str)
+        assert loaded_param.model_dump() == param.model_dump()
+        assert loaded_param.items.type == param.items.type
+
+    # Test object parameter
+    object_param = Parameter(
+        name="person",
+        type="object",
+        properties={
+            "name": Parameter(name="name", type="string"),
+            "age": Parameter(name="age", type="integer"),
+            "scores": Parameter(
+                name="scores",
+                type="array",
+                items=Parameter(name="score", type="number")
+            )
+        }
+    )
+
+    json_str = object_param.model_dump_json()
+    loaded_object = Parameter.model_validate_json(json_str)
+    assert loaded_object.model_dump() == object_param.model_dump()
+    assert loaded_object.properties["name"].type == "string"
+    assert loaded_object.properties["age"].type == "integer"
+    assert loaded_object.properties["scores"].type == "array"
+    assert loaded_object.properties["scores"].items.type == "number"
+
+    # Test deeply nested structure
+    nested_param = Parameter(
+        name="organization",
+        type="object",
+        properties={
+            "name": Parameter(name="name", type="string"),
+            "departments": Parameter(
+                name="departments",
+                type="array",
+                items=Parameter(
+                    name="department",
+                    type="object",
+                    properties={
+                        "name": Parameter(name="name", type="string"),
+                        "employees": Parameter(
+                            name="employees",
+                            type="array",
+                            items=Parameter(
+                                name="employee",
+                                type="object",
+                                properties={
+                                    "name": Parameter(name="name", type="string"),
+                                    "age": Parameter(name="age", type="integer"),
+                                    "skills": Parameter(
+                                        name="skills",
+                                        type="array",
+                                        items=Parameter(name="skill", type="string")
+                                    )
+                                }
+                            )
+                        )
+                    }
+                )
+            )
+        }
+    )
+
+    json_str = nested_param.model_dump_json()
+    loaded_nested = Parameter.model_validate_json(json_str)
+    assert loaded_nested.model_dump() == nested_param.model_dump()
+    
+    # Verify deep structure is preserved
+    dept_items = loaded_nested.properties["departments"].items
+    assert dept_items.type == "object"
+    assert dept_items.properties["employees"].type == "array"
+    
+    emp_items = dept_items.properties["employees"].items
+    assert emp_items.type == "object"
+    assert emp_items.properties["skills"].type == "array"
+    assert emp_items.properties["skills"].items.type == "string"
