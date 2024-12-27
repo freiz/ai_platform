@@ -50,6 +50,7 @@ def test_param_type_validation():
 def test_invalid_param_type():
     """Test creating Parameter with invalid type."""
     with pytest.raises(ValidationError):
+        # noinspection PyTypeChecker
         Parameter(name="test", type="invalid_type")
 
 
@@ -57,6 +58,7 @@ def test_valid_param_types():
     """Test all valid parameter types."""
     valid_types = get_args(ParamType)
     for valid_type in valid_types:
+        # noinspection PyBroadException
         try:
             Parameter(name="test", type=valid_type)
         except Exception:

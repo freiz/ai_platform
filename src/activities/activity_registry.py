@@ -38,6 +38,11 @@ class ActivityRegistry:
             cls._instance = super(ActivityRegistry, cls).__new__(cls)
         return cls._instance
 
+    @classmethod
+    def clear(cls):
+        """Clear all registered activities. Should only be used in tests."""
+        cls._registry.clear()
+
     @staticmethod
     def _convert_to_parameter(value: Any) -> Parameter:
         """Convert a value to a Parameter if it's not already one."""
@@ -191,3 +196,49 @@ class ActivityRegistry:
 
         # For customizable parameter activities, pass all params
         return info.activity_type(**params)
+
+    @classmethod
+    def register_activity(cls, 
+                        activity_type_name: str,
+                        description: str,
+                        required_params: Optional[Dict[str, Parameter]] = None,
+                        allow_custom_params: bool = False):
+        """
+        Class decorator for registering activities.
+        
+        Args:
+            activity_type_name: Unique name for the activity type (class-level constant)
+            description: Human-readable description of what the activity does
+            required_params: Additional parameters required to instantiate the activity
+            allow_custom_params: If True, input/output params can be defined per instance
+            
+        Returns:
+            The decorated activity class
+        """
+        def decorator(activity_cls: Type[Activity]):
+            # Store registration info on the class itself
+            activity_cls._registration_info = {
+                "activity_type_name": activity_type_name,
+                "description": description,
+                "required_params": required_params or {
+                    "activity_name": Parameter(name="activity_name", type="string")
+                },
+                "allow_custom_params": allow_custom_params
+            }
+            return activity_cls
+        return decorator
+
+    @classmethod
+    def register_class(cls, activity_cls: Type[Activity]):
+        """Register an activity class using its stored registration info."""
+        if not hasattr(activity_cls, '_registration_info'):
+            raise ValueError(f"Class {activity_cls.__name__} has no registration info. Did you forget the @register_activity decorator?")
+        
+        info = activity_cls._registration_info
+        cls.register(
+            activity_name=info["activity_type_name"],
+            activity_type=activity_cls,
+            required_params=info["required_params"],
+            description=info["description"],
+            allow_custom_params=info["allow_custom_params"]
+        )

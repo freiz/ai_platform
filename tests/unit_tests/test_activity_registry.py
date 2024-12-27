@@ -1,53 +1,36 @@
 import pytest
 
-from src.activities.activity import Activity, Parameter
+from src.activities.activity import Parameter
 from src.activities.activity_registry import ActivityRegistry
 from src.activities.llm_activity import LLMActivity
+from tests.unit_tests.test_activities import StringLengthActivity, CustomParamsActivity
 
 
-# Example activity type with fixed parameters
-class StringLengthActivity(Activity):
-    def __init__(self, activity_name: str = "string_length"):
-        input_params = {
-            'text': Parameter(name='text', type="string")
-        }
-        output_params = {
-            'length': Parameter(name='length', type="integer")
-        }
-        super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
+@pytest.fixture(autouse=True)
+def setup_registry():
+    """Setup clean registry with test activities for each test."""
+    # Clear the registry first
+    ActivityRegistry.clear()
 
-    def run(self, text):
-        return {'length': len(text)}
+    # Register test activities using their stored registration info
+    ActivityRegistry.register_class(StringLengthActivity)
+    ActivityRegistry.register_class(CustomParamsActivity)
+    ActivityRegistry.register_class(LLMActivity)
+
+    yield
 
 
-# Example activity type with customizable parameters
-class CustomParamsActivity(Activity):
-    def __init__(self, activity_name: str, input_params: dict, output_params: dict):
-        super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
-
-    def run(self, **inputs):
-        # Create a greeting using the input name
-        return {
-            "greeting": f"Hello, {inputs['name']}!"
-        }
+@pytest.fixture(autouse=True)
+def clear_registry():
+    """Automatically clear the registry before each test."""
+    ActivityRegistry.clear()
+    yield
 
 
 def test_fixed_params_activity():
     registry = ActivityRegistry()
 
-    # Register activity type with fixed parameters
-    registry.register(
-        "string_length",
-        StringLengthActivity,
-        required_params={
-            "activity_name": Parameter(name="activity_name", type="string")
-        },
-        description="Calculates the length of a string",
-        # No need to specify fixed params, they'll be taken from the class
-        allow_custom_params=False  # This is the default
-    )
-
-    # Get activity type info
+    # Get activity type info (already registered via decorator)
     activity_types = registry.get_activity_types()
     info = activity_types["string_length"]
 
@@ -80,18 +63,7 @@ def test_fixed_params_activity():
 def test_custom_params_activity():
     registry = ActivityRegistry()
 
-    # Register activity type with customizable parameters
-    registry.register(
-        "custom_params",
-        CustomParamsActivity,
-        required_params={
-            "activity_name": Parameter(name="activity_name", type="string")
-        },
-        description="Activity with customizable parameters",
-        allow_custom_params=True
-    )
-
-    # Get activity type info
+    # Get activity type info (already registered via decorator)
     activity_types = registry.get_activity_types()
     info = activity_types["custom_params"]
 
@@ -123,24 +95,7 @@ def test_custom_params_activity():
 def test_llm_activity_registration():
     registry = ActivityRegistry()
 
-    # Register LLM activity type with customizable parameters
-    registry.register(
-        "llm_activity",
-        LLMActivity,
-        required_params={
-            "activity_name": Parameter(name="activity_name", type="string"),
-            "system_message": Parameter(name="system_message", type="string"),
-            "llm_config": Parameter(name="llm_config", type="object", properties={
-                "model_name": Parameter(name="model_name", type="string"),
-                "temperature": Parameter(name="temperature", type="number"),
-                "top_p": Parameter(name="top_p", type="number")
-            })
-        },
-        description="LLM-based activity with customizable I/O parameters",
-        allow_custom_params=True
-    )
-
-    # Get activity type info
+    # Get activity type info (already registered via decorator)
     activity_types = registry.get_activity_types()
     info = activity_types["llm_activity"]
 
