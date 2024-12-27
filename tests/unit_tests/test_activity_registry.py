@@ -85,9 +85,7 @@ def test_custom_params_activity():
         "custom_params",
         CustomParamsActivity,
         required_params={
-            "activity_name": Parameter(name="activity_name", type="string"),
-            "input_params": Parameter(name="input_params", type="object"),
-            "output_params": Parameter(name="output_params", type="object")
+            "activity_name": Parameter(name="activity_name", type="string")
         },
         description="Activity with customizable parameters",
         allow_custom_params=True
@@ -136,9 +134,7 @@ def test_llm_activity_registration():
                 "model_name": Parameter(name="model_name", type="string"),
                 "temperature": Parameter(name="temperature", type="number"),
                 "top_p": Parameter(name="top_p", type="number")
-            }),
-            "input_params": Parameter(name="input_params", type="object"),
-            "output_params": Parameter(name="output_params", type="object")
+            })
         },
         description="LLM-based activity with customizable I/O parameters",
         allow_custom_params=True
@@ -153,7 +149,7 @@ def test_llm_activity_registration():
     assert info["output_params"] is None
     assert info["allow_custom_params"]
 
-    # Create an instance (capital finder)
+    # Create an instance (capital finder) using Parameter objects
     activity = registry.create_activity(
         "llm_activity",
         {
@@ -176,3 +172,35 @@ def test_llm_activity_registration():
     # Verify the activity has the right parameters
     assert "country" in activity.input_params
     assert "capital" in activity.output_params
+
+    # Create an instance using JSON-like dict format
+    activity_json = registry.create_activity(
+        "llm_activity",
+        {
+            "activity_name": "capital_finder",
+            "system_message": "You are a helpful assistant that returns the capital of a country.",
+            "llm_config": {
+                "model_name": "gpt-4o-mini",
+                "temperature": 0.1,
+                "top_p": 0.9
+            },
+            "input_params": {
+                "country": {
+                    "name": "country",
+                    "type": "string"
+                }
+            },
+            "output_params": {
+                "capital": {
+                    "name": "capital",
+                    "type": "string"
+                }
+            }
+        }
+    )
+
+    # Verify the activity created from JSON has the right parameters
+    assert "country" in activity_json.input_params
+    assert isinstance(activity_json.input_params["country"], Parameter)
+    assert "capital" in activity_json.output_params
+    assert isinstance(activity_json.output_params["capital"], Parameter)

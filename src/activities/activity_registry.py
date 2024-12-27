@@ -38,6 +38,23 @@ class ActivityRegistry:
             cls._instance = super(ActivityRegistry, cls).__new__(cls)
         return cls._instance
 
+    @staticmethod
+    def _convert_to_parameter(value: Any) -> Parameter:
+        """Convert a value to a Parameter if it's not already one."""
+        if isinstance(value, Parameter):
+            return value
+        if isinstance(value, dict):
+            return Parameter.model_validate(value)
+        raise ValueError(f"Cannot convert {type(value)} to Parameter")
+
+    @staticmethod
+    def _convert_params_dict(params: Dict[str, Any]) -> Dict[str, Parameter]:
+        """Convert a dictionary of parameters to use Parameter objects."""
+        return {
+            k: ActivityRegistry._convert_to_parameter(v)
+            for k, v in params.items()
+        }
+
     @classmethod
     def register(cls,
                  activity_name: str,
@@ -117,8 +134,8 @@ class ActivityRegistry:
 
     @classmethod
     def create_activity(cls,
-                        activity_type_name: str,
-                        params: Dict[str, Any]) -> Activity:
+                       activity_type_name: str,
+                       params: Dict[str, Any]) -> Activity:
         """
         Create an instance of a registered activity type.
         
@@ -136,6 +153,12 @@ class ActivityRegistry:
             raise ValueError(f"Activity type {activity_type_name} not found")
 
         info = cls._registry[activity_type_name]
+
+        # Convert input_params and output_params to Parameter objects if they exist
+        if "input_params" in params:
+            params = {**params, "input_params": cls._convert_params_dict(params["input_params"])}
+        if "output_params" in params:
+            params = {**params, "output_params": cls._convert_params_dict(params["output_params"])}
 
         # Validate required params
         for param_name, param in info.required_params.items():
