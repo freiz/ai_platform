@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.activities import router as activities_router
 from src.api.activity_types import router as activity_types_router, register_activities
 
 
@@ -34,6 +35,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(activity_types_router)
+app.include_router(activities_router)
 
 
 # Root endpoint
