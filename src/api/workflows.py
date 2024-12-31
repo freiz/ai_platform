@@ -9,14 +9,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.connection import get_session
 from src.database.models import WorkflowModel, ActivityModel
-from src.workflow import Connection
+
+
+class WorkflowNode(BaseModel):
+    """Model for a node in the workflow."""
+    activity_id: UUID
+    label: str  # User-provided label for this instance
+
+
+class WorkflowConnection(BaseModel):
+    """Model for a connection between workflow nodes."""
+    source_node: str  # Node ID
+    source_output: str
+    target_node: str  # Node ID
+    target_input: str
 
 
 class CreateWorkflowRequest(BaseModel):
     """Request model for creating a workflow."""
     workflow_name: str
-    activities: Dict[str, UUID]  # Map of activity name to activity UUID
-    connections: List[Connection]  # List of connections between activities
+    nodes: Dict[str, WorkflowNode]  # Map of node_id to node info
+    connections: List[WorkflowConnection]  # List of connections between nodes
 
 
 # Create router for user workflows
@@ -28,10 +41,10 @@ router = APIRouter(
 
 @router.post("", status_code=201)
 async def create_workflow(
-        user_id: UUID,
-        request: CreateWorkflowRequest,
-        response: Response,
-        session: AsyncSession = Depends(get_session)
+    user_id: UUID,
+    request: CreateWorkflowRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_session)
 ):
     """
     Create a new workflow for a user.
@@ -40,8 +53,8 @@ async def create_workflow(
         user_id: UUID of the user
         request: The workflow creation request containing:
             - workflow_name: Name of the workflow
-            - activities: Map of activity name to activity UUID
-            - connections: List of connections between activities
+            - nodes: Map of node_id to node info (activity_id and label)
+            - connections: List of connections between nodes
         response: FastAPI response object for setting headers
         session: Database session dependency
             
@@ -53,21 +66,30 @@ async def create_workflow(
     """
     try:
         # Verify all activities exist
-        for activity_id in request.activities.values():
-            stmt = select(ActivityModel).where(ActivityModel.id == activity_id)
+        for node in request.nodes.values():
+            stmt = select(ActivityModel).where(ActivityModel.id == node.activity_id)
             result = await session.execute(stmt)
             if not result.scalar_one_or_none():
-                raise ValueError(f"Activity {activity_id} not found")
+                raise ValueError(f"Activity {node.activity_id} not found")
 
         # Generate workflow ID
         workflow_id = uuid4()
 
-        # Convert connections to dictionaries with string UUIDs
+        # Convert nodes to dictionary format
+        node_dicts = {
+            node_id: {
+                "activity_id": str(node.activity_id),
+                "label": node.label
+            }
+            for node_id, node in request.nodes.items()
+        }
+
+        # Convert connections to dictionary format
         connection_dicts = [
             {
-                "source_activity_id": str(conn.source_activity_id),
+                "source_node": conn.source_node,
                 "source_output": conn.source_output,
-                "target_activity_id": str(conn.target_activity_id),
+                "target_node": conn.target_node,
                 "target_input": conn.target_input
             }
             for conn in request.connections
@@ -77,10 +99,10 @@ async def create_workflow(
         db_workflow = WorkflowModel(
             id=workflow_id,
             workflow_name=request.workflow_name,
-            activities=request.activities,
+            nodes=node_dicts,
             connections=connection_dicts
         )
-
+        
         try:
             # Save to database
             session.add(db_workflow)
@@ -98,9 +120,7 @@ async def create_workflow(
         return {
             "id": str(workflow_id),
             "workflow_name": request.workflow_name,
-            "activities": {
-                name: str(uuid) for name, uuid in request.activities.items()
-            },
+            "nodes": node_dicts,
             "connections": connection_dicts,
             "created_at": db_workflow.created_at.isoformat()
         }
@@ -115,9 +135,9 @@ async def create_workflow(
 
 @router.get("/{workflow_id}")
 async def get_workflow(
-        user_id: UUID,
-        workflow_id: UUID,
-        session: AsyncSession = Depends(get_session)
+    user_id: UUID,
+    workflow_id: UUID,
+    session: AsyncSession = Depends(get_session)
 ):
     """
     Get a workflow by its ID.
@@ -138,23 +158,21 @@ async def get_workflow(
         stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
         result = await session.execute(stmt)
         workflow = result.scalar_one_or_none()
-
+        
         if not workflow:
             raise HTTPException(
                 status_code=404,
                 detail=f"Workflow {workflow_id} not found"
             )
-
+            
         return {
             "id": str(workflow.id),
             "workflow_name": workflow.workflow_name,
-            "activities": {
-                name: str(uuid) for name, uuid in workflow.activities.items()
-            },
+            "nodes": workflow.nodes,
             "connections": workflow.connections,
             "created_at": workflow.created_at.isoformat()
         }
-
+        
     except HTTPException:
         raise
     except Exception as e:

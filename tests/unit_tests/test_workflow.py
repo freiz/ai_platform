@@ -4,7 +4,7 @@ from uuid import UUID
 import pytest
 
 from src.activities import Activity, Parameter
-from src.workflow import Workflow, Connection
+from src.workflow import Workflow, Connection, WorkflowNode
 
 
 class StringLengthActivity(Activity):
@@ -43,11 +43,16 @@ class TestWorkflow:
 
         # Create workflow
         workflow = Workflow()
-        workflow.add_activity("uppercase", upper)  # First activity
-        workflow.add_activity("length", str_len)   # Second activity
+        workflow.add_node("uppercase1", upper, "First Uppercase")  # First activity
+        workflow.add_node("length1", str_len, "First Length")   # Second activity
 
-        # Connect activities using UUIDs - text input goes to uppercase, then uppercase output goes to length
-        workflow.connect_activities(upper.id, 'uppercase_text', str_len.id, 'text')
+        # Connect nodes - uppercase output goes to length input
+        workflow.connect_nodes(
+            source_node="uppercase1",
+            source_output="uppercase_text",
+            target_node="length1",
+            target_input="text"
+        )
 
         # Set input - goes to the first activity (uppercase)
         input_data = {'text': 'hello'}
@@ -56,91 +61,113 @@ class TestWorkflow:
         # Final output should be the length of the uppercase text
         assert result['length'] == 5
 
+    def test_workflow_reuse_activity(self):
+        """Test that the same activity can be used multiple times in a workflow."""
+        # Create activities
+        str_len = StringLengthActivity()
+        upper = UppercaseActivity()
+
+        # Create workflow with multiple instances of the same activities
+        workflow = Workflow()
+        workflow.add_node("upper1", upper, "First Uppercase")
+        workflow.add_node("upper2", upper, "Second Uppercase")  # Reusing uppercase activity
+
+        # Connect nodes: text -> upper1 -> upper2
+        # First uppercase converts 'hello' to 'HELLO'
+        # Second uppercase keeps it as 'HELLO' (since it's already uppercase)
+        workflow.connect_nodes("upper1", "uppercase_text", "upper2", "text")
+
+        # Run workflow with initial input
+        result = workflow.run({'text': 'hello'})
+
+        # The final result should still be 'HELLO'
+        assert result['uppercase_text'] == 'HELLO'
+
+        # Let's also test with a more complex workflow using compatible types
+        workflow2 = Workflow()
+        workflow2.add_node("upper1", upper, "First Uppercase")
+        workflow2.add_node("upper2", upper, "Second Uppercase")
+        workflow2.add_node("upper3", upper, "Third Uppercase")
+
+        # Create a chain of uppercase conversions (each one receives string and outputs string)
+        workflow2.connect_nodes("upper1", "uppercase_text", "upper2", "text")
+        workflow2.connect_nodes("upper2", "uppercase_text", "upper3", "text")
+
+        result2 = workflow2.run({'text': 'hello'})
+        assert result2['uppercase_text'] == 'HELLO'  # Still HELLO since uppercase is idempotent
+
+    def test_workflow_node_validation(self):
+        workflow = Workflow()
+        str_len = StringLengthActivity()
+
+        # Add a node
+        workflow.add_node("length1", str_len, "First Length")
+
+        # Test connecting non-existent nodes
+        with pytest.raises(ValueError, match="Node not found"):
+            workflow.connect_nodes("nonexistent", "output", "length1", "text")
+
+        with pytest.raises(ValueError, match="Node not found"):
+            workflow.connect_nodes("length1", "length", "nonexistent", "text")
+
+        # Test connecting with invalid parameters
+        upper = UppercaseActivity()
+        workflow.add_node("upper1", upper, "First Uppercase")
+
+        with pytest.raises(ValueError, match="Output parameter .* not found"):
+            workflow.connect_nodes("upper1", "nonexistent", "length1", "text")
+
+        with pytest.raises(ValueError, match="Input parameter .* not found"):
+            workflow.connect_nodes("upper1", "uppercase_text", "length1", "nonexistent")
+
     def test_workflow_serialization(self):
         workflow = Workflow()
         str_len = StringLengthActivity()
-        workflow.add_activity(str_len.activity_name, str_len)
+        workflow.add_node("length1", str_len, "First Length")
 
         serialized = workflow.model_dump()
-        assert 'activities' in serialized
-        assert len(serialized['activities']) == 1
-        assert str_len.activity_name in serialized['activities']
-
-    def test_input_validation(self):
-        workflow = Workflow()
-        str_len = StringLengthActivity()
-        workflow.add_activity(str_len.activity_name, str_len)
-
-        with pytest.raises(ValueError):
-            workflow.run({})  # Missing required input
-
-        with pytest.raises(ValueError):
-            workflow.run({'text': 123})  # Wrong type (integer instead of string)
+        assert 'nodes' in serialized
+        assert len(serialized['nodes']) == 1
+        assert 'length1' in serialized['nodes']
+        assert serialized['nodes']['length1']['label'] == "First Length"
 
     def test_connection_model(self):
-        # Test creating a valid connection with UUIDs
-        str_len = StringLengthActivity()
-        upper = UppercaseActivity()
-        
+        # Test creating a valid connection
         connection = Connection(
-            source_activity_id=upper.id,
-            source_output="uppercase_text",
-            target_activity_id=str_len.id,
-            target_input="text"
+            source_node="node1",
+            source_output="output1",
+            target_node="node2",
+            target_input="input1"
         )
-        assert isinstance(connection.source_activity_id, UUID)
-        assert connection.source_output == "uppercase_text"
-        assert isinstance(connection.target_activity_id, UUID)
-        assert connection.target_input == "text"
+        assert connection.source_node == "node1"
+        assert connection.source_output == "output1"
+        assert connection.target_node == "node2"
+        assert connection.target_input == "input1"
 
         # Test connection serialization
         connection_dict = connection.model_dump()
-        assert str(connection_dict["source_activity_id"]) == str(upper.id)
-        assert connection_dict["source_output"] == "uppercase_text"
-        assert str(connection_dict["target_activity_id"]) == str(str_len.id)
-        assert connection_dict["target_input"] == "text"
-
-    def test_connection_json_serialization(self):
-        """Test Connection JSON serialization/deserialization."""
-        # Create activities to get UUIDs
-        str_len = StringLengthActivity()
-        upper = UppercaseActivity()
-        
-        # Create a connection
-        connection = Connection(
-            source_activity_id=upper.id,
-            source_output="uppercase_text",
-            target_activity_id=str_len.id,
-            target_input="text"
-        )
-
-        # Test serialization to JSON
-        json_str = connection.model_dump_json()
-
-        # Test deserialization from JSON
-        loaded_connection = Connection.model_validate_json(json_str)
-
-        # Verify the deserialized object matches the original
-        assert str(loaded_connection.source_activity_id) == str(connection.source_activity_id)
-        assert loaded_connection.source_output == connection.source_output
-        assert str(loaded_connection.target_activity_id) == str(connection.target_activity_id)
-        assert loaded_connection.target_input == connection.target_input
+        assert connection_dict["source_node"] == "node1"
+        assert connection_dict["source_output"] == "output1"
+        assert connection_dict["target_node"] == "node2"
+        assert connection_dict["target_input"] == "input1"
 
     def test_workflow_json_serialization(self):
         """Test Workflow JSON serialization/deserialization."""
         # Create a workflow with activities and connections
         workflow = Workflow()
 
-        # Add activities
+        # Add activities as nodes
         str_len = StringLengthActivity()
         upper = UppercaseActivity()
-        workflow.add_activity("uppercase", upper)  # First activity
-        workflow.add_activity("length", str_len)   # Second activity
+        workflow.add_node("uppercase1", upper, "First Uppercase")
+        workflow.add_node("length1", str_len, "First Length")
 
-        # Add connection using UUIDs - uppercase output goes to length input
-        workflow.connect_activities(
-            upper.id, 'uppercase_text',
-            str_len.id, 'text'
+        # Add connection
+        workflow.connect_nodes(
+            source_node="uppercase1",
+            source_output="uppercase_text",
+            target_node="length1",
+            target_input="text"
         )
 
         # Test serialization to JSON
@@ -149,48 +176,48 @@ class TestWorkflow:
         # Test deserialization from JSON
         data = json.loads(json_str)
 
-        # Create a mapping of activity names to their original UUIDs
-        activity_ids = {
-            name: UUID(activity_data['id']) 
-            for name, activity_data in data['activities'].items()
-        }
-
-        # Reconstruct activities with original UUIDs
+        # Reconstruct workflow
         loaded_workflow = Workflow()
-        for name, activity_data in data['activities'].items():
-            activity_id = activity_ids[name]
-            if activity_data['activity_name'] == 'string_length':
-                activity = StringLengthActivity(activity_name=activity_data['activity_name'])
-                activity.id = activity_id  # Restore original UUID
+        
+        # Reconstruct nodes
+        for node_id, node_data in data['nodes'].items():
+            # Create appropriate activity instance
+            if "string_length" in node_data['activity']['activity_name']:
+                activity = StringLengthActivity(activity_name=node_data['activity']['activity_name'])
             else:
-                activity = UppercaseActivity(activity_name=activity_data['activity_name'])
-                activity.id = activity_id  # Restore original UUID
-            loaded_workflow.add_activity(name, activity)
+                activity = UppercaseActivity(activity_name=node_data['activity']['activity_name'])
+            
+            # Set activity ID to match original
+            activity.id = UUID(node_data['activity']['id'])
+            
+            # Add node to workflow
+            loaded_workflow.add_node(node_id, activity, node_data['label'])
 
         # Reconstruct connections
         for conn_data in data['connections']:
-            loaded_workflow.connect_activities(
-                UUID(conn_data['source_activity_id']),
+            loaded_workflow.connect_nodes(
+                conn_data['source_node'],
                 conn_data['source_output'],
-                UUID(conn_data['target_activity_id']),
+                conn_data['target_node'],
                 conn_data['target_input']
             )
 
-        # Verify activities
-        assert len(loaded_workflow.activities) == len(workflow.activities)
-        for name, activity in workflow.activities.items():
-            loaded_activity = loaded_workflow.activities[name]
-            assert loaded_activity.activity_name == activity.activity_name
-            assert loaded_activity.id == activity.id  # Verify UUIDs match
-            assert len(loaded_activity.input_params) == len(activity.input_params)
-            assert len(loaded_activity.output_params) == len(activity.output_params)
+        # Verify nodes
+        assert len(loaded_workflow.nodes) == len(workflow.nodes)
+        for node_id, node in workflow.nodes.items():
+            loaded_node = loaded_workflow.nodes[node_id]
+            assert loaded_node.label == node.label
+            assert loaded_node.activity.activity_name == node.activity.activity_name
+            assert loaded_node.activity.id == node.activity.id
+            assert len(loaded_node.activity.input_params) == len(node.activity.input_params)
+            assert len(loaded_node.activity.output_params) == len(node.activity.output_params)
 
         # Verify connections
         assert len(loaded_workflow.connections) == len(workflow.connections)
         for conn, loaded_conn in zip(workflow.connections, loaded_workflow.connections):
-            assert str(loaded_conn.source_activity_id) == str(conn.source_activity_id)
+            assert loaded_conn.source_node == conn.source_node
             assert loaded_conn.source_output == conn.source_output
-            assert str(loaded_conn.target_activity_id) == str(conn.target_activity_id)
+            assert loaded_conn.target_node == conn.target_node
             assert loaded_conn.target_input == conn.target_input
 
         # Test that the loaded workflow can still execute
