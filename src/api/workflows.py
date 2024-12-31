@@ -233,3 +233,48 @@ async def get_workflow(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{workflow_id}", status_code=204)
+async def delete_workflow(
+    user_id: UUID,
+    workflow_id: UUID,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Delete a workflow by its ID.
+    
+    Args:
+        user_id: UUID of the user
+        workflow_id: UUID of the workflow to delete
+        session: Database session dependency
+        
+    Returns:
+        No content on success
+        
+    Raises:
+        HTTPException: If workflow not found
+    """
+    try:
+        # Query the database
+        stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
+        result = await session.execute(stmt)
+        workflow = result.scalar_one_or_none()
+        
+        if not workflow:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow {workflow_id} not found"
+            )
+            
+        # Delete the workflow
+        await session.delete(workflow)
+        await session.commit()
+        
+        # Return no content (204)
+        return None
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
