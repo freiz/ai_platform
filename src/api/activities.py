@@ -25,12 +25,50 @@ class CreateActivityRequest(BaseModel):
     params: Dict
 
 
+@router.get("")
+async def list_activities(
+        user_id: UUID,
+        session: AsyncSession = Depends(get_session)
+):
+    """
+    List all activities for a user.
+    
+    Args:
+        user_id: UUID of the user
+        session: Database session dependency
+            
+    Returns:
+        List of activities
+    """
+    try:
+        # Query all activities
+        stmt = select(ActivityModel)
+        result = await session.execute(stmt)
+        activities = result.scalars().all()
+
+        return [
+            {
+                "id": str(activity.id),
+                "activity_type": activity.activity_type_name,
+                "activity_name": activity.activity_name,
+                "created_at": activity.created_at.isoformat(),
+                "input_params_schema": activity.input_params_schema,
+                "output_params_schema": activity.output_params_schema,
+                "params": activity.params
+            }
+            for activity in activities
+        ]
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("", status_code=201)
 async def create_activity(
-    user_id: UUID, 
-    request: CreateActivityRequest,
-    response: Response,
-    session: AsyncSession = Depends(get_session)
+        user_id: UUID,
+        request: CreateActivityRequest,
+        response: Response,
+        session: AsyncSession = Depends(get_session)
 ):
     """
     Create a new activity for a user.
@@ -74,16 +112,16 @@ async def create_activity(
             activity_type_name=request.activity_type_name,
             activity_name=activity.activity_name,
             input_params_schema={
-                name: param.model_dump() 
+                name: param.model_dump()
                 for name, param in activity.input_params.items()
             },
             output_params_schema={
-                name: param.model_dump() 
+                name: param.model_dump()
                 for name, param in activity.output_params.items()
             },
             params=request.params
         )
-        
+
         try:
             # Save to database
             session.add(db_activity)
@@ -118,9 +156,9 @@ async def create_activity(
 
 @router.delete("/{activity_id}", status_code=204)
 async def delete_activity(
-    user_id: UUID,
-    activity_id: UUID,
-    session: AsyncSession = Depends(get_session)
+        user_id: UUID,
+        activity_id: UUID,
+        session: AsyncSession = Depends(get_session)
 ):
     """
     Delete an activity by its ID.
@@ -141,20 +179,20 @@ async def delete_activity(
         stmt = select(ActivityModel).where(ActivityModel.id == activity_id)
         result = await session.execute(stmt)
         activity = result.scalar_one_or_none()
-        
+
         if not activity:
             raise HTTPException(
                 status_code=404,
                 detail=f"Activity {activity_id} not found"
             )
-            
+
         # Delete the activity
         await session.delete(activity)
         await session.commit()
-        
+
         # Return no content (204)
         return None
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -163,9 +201,9 @@ async def delete_activity(
 
 @router.get("/{activity_id}")
 async def get_activity(
-    user_id: UUID,
-    activity_id: UUID,
-    session: AsyncSession = Depends(get_session)
+        user_id: UUID,
+        activity_id: UUID,
+        session: AsyncSession = Depends(get_session)
 ):
     """
     Get an activity by its ID.
@@ -186,19 +224,19 @@ async def get_activity(
         stmt = select(ActivityModel).where(ActivityModel.id == activity_id)
         result = await session.execute(stmt)
         activity = result.scalar_one_or_none()
-        
+
         if not activity:
             raise HTTPException(
                 status_code=404,
                 detail=f"Activity {activity_id} not found"
             )
-            
+
         # Recreate activity instance
         activity_instance = ActivityRegistry().create_activity(
             activity_type_name=activity.activity_type_name,
             params=activity.params
         )
-        
+
         # Merge activity instance fields with top-level fields
         activity_data = activity_instance.model_dump(exclude={"id", "activity_name"})
         return {
@@ -208,7 +246,7 @@ async def get_activity(
             "created_at": activity.created_at.isoformat(),
             **activity_data  # Spread remaining activity fields at top level
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:

@@ -1,8 +1,8 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Depends, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,14 +11,14 @@ from src.database.connection import get_session
 from src.database.models import WorkflowModel, ActivityModel
 
 
-class WorkflowNode(BaseModel):
-    """Model for a node in the workflow."""
+class WorkflowNodeCreate(BaseModel):
+    """Request model for creating a node in the workflow API."""
     activity_id: UUID
     label: str  # User-provided label for this instance
 
 
-class WorkflowConnection(BaseModel):
-    """Model for a connection between workflow nodes."""
+class WorkflowConnectionCreate(BaseModel):
+    """Request model for creating a connection in the workflow API."""
     source_node: str  # Node ID
     source_output: str
     target_node: str  # Node ID
@@ -28,8 +28,9 @@ class WorkflowConnection(BaseModel):
 class CreateWorkflowRequest(BaseModel):
     """Request model for creating a workflow."""
     workflow_name: str
-    nodes: Dict[str, WorkflowNode]  # Map of node_id to node info
-    connections: List[WorkflowConnection]  # List of connections between nodes
+    nodes: Dict[str, WorkflowNodeCreate]  # Map of node_id to node info
+    connections: Optional[List[WorkflowConnectionCreate]] = Field(
+        default_factory=list)  # Optional connections between nodes
 
 
 # Create router for user workflows
@@ -39,12 +40,48 @@ router = APIRouter(
 )
 
 
+@router.get("")
+async def list_workflows(
+        user_id: UUID,
+        session: AsyncSession = Depends(get_session)
+):
+    """
+    List all workflows for a user.
+    
+    Args:
+        user_id: UUID of the user
+        session: Database session dependency
+            
+    Returns:
+        List of workflows with their nodes and connections
+    """
+    try:
+        # Query all workflows
+        stmt = select(WorkflowModel)
+        result = await session.execute(stmt)
+        workflows = result.scalars().all()
+
+        return [
+            {
+                "id": str(workflow.id),
+                "workflow_name": workflow.workflow_name,
+                "nodes": workflow.nodes,
+                "connections": workflow.connections,
+                "created_at": workflow.created_at.isoformat()
+            }
+            for workflow in workflows
+        ]
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("", status_code=201)
 async def create_workflow(
-    user_id: UUID,
-    request: CreateWorkflowRequest,
-    response: Response,
-    session: AsyncSession = Depends(get_session)
+        user_id: UUID,
+        request: CreateWorkflowRequest,
+        response: Response,
+        session: AsyncSession = Depends(get_session)
 ):
     """
     Create a new workflow for a user.
@@ -54,7 +91,7 @@ async def create_workflow(
         request: The workflow creation request containing:
             - workflow_name: Name of the workflow
             - nodes: Map of node_id to node info (activity_id and label)
-            - connections: List of connections between nodes
+            - connections: Optional list of connections between nodes
         response: FastAPI response object for setting headers
         session: Database session dependency
             
@@ -62,15 +99,30 @@ async def create_workflow(
         The created workflow instance with its ID
         
     Raises:
-        HTTPException: If activities not found or name already exists
+        HTTPException: If activities not found, name already exists, or node labels are duplicated
     """
     try:
-        # Verify all activities exist
+        # Verify all activities exist and check for duplicate labels
+        node_labels = set()
         for node in request.nodes.values():
+            # Check activity exists
             stmt = select(ActivityModel).where(ActivityModel.id == node.activity_id)
             result = await session.execute(stmt)
             if not result.scalar_one_or_none():
                 raise ValueError(f"Activity {node.activity_id} not found")
+
+            # Check for duplicate labels
+            if node.label in node_labels:
+                raise ValueError(f"Duplicate node label found: {node.label}")
+            node_labels.add(node.label)
+
+        # Verify all connection nodes exist in the nodes dictionary
+        if request.connections:
+            for conn in request.connections:
+                if conn.source_node not in request.nodes:
+                    raise ValueError(f"Source node not found: {conn.source_node}")
+                if conn.target_node not in request.nodes:
+                    raise ValueError(f"Target node not found: {conn.target_node}")
 
         # Generate workflow ID
         workflow_id = uuid4()
@@ -92,7 +144,7 @@ async def create_workflow(
                 "target_node": conn.target_node,
                 "target_input": conn.target_input
             }
-            for conn in request.connections
+            for conn in (request.connections or [])
         ]
 
         # Create database model
@@ -102,7 +154,7 @@ async def create_workflow(
             nodes=node_dicts,
             connections=connection_dicts
         )
-        
+
         try:
             # Save to database
             session.add(db_workflow)
@@ -135,9 +187,9 @@ async def create_workflow(
 
 @router.get("/{workflow_id}")
 async def get_workflow(
-    user_id: UUID,
-    workflow_id: UUID,
-    session: AsyncSession = Depends(get_session)
+        user_id: UUID,
+        workflow_id: UUID,
+        session: AsyncSession = Depends(get_session)
 ):
     """
     Get a workflow by its ID.
@@ -158,13 +210,13 @@ async def get_workflow(
         stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
         result = await session.execute(stmt)
         workflow = result.scalar_one_or_none()
-        
+
         if not workflow:
             raise HTTPException(
                 status_code=404,
                 detail=f"Workflow {workflow_id} not found"
             )
-            
+
         return {
             "id": str(workflow.id),
             "workflow_name": workflow.workflow_name,
@@ -172,7 +224,7 @@ async def get_workflow(
             "connections": workflow.connections,
             "created_at": workflow.created_at.isoformat()
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
