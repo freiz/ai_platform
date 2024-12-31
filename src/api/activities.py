@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.activities.activity_registry import ActivityRegistry
@@ -48,7 +49,7 @@ async def create_activity(
         The created activity instance with its ID
         
     Raises:
-        HTTPException: If activity type not found or params are invalid
+        HTTPException: If activity type not found, params are invalid, or name already exists
     """
     try:
         # Get activity type info to verify allow_custom_params
@@ -83,23 +84,79 @@ async def create_activity(
             params=request.params
         )
         
-        # Save to database
-        session.add(db_activity)
-        await session.commit()
+        try:
+            # Save to database
+            session.add(db_activity)
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            raise HTTPException(
+                status_code=409,  # Conflict
+                detail=f"Activity with name '{activity.activity_name}' already exists"
+            )
 
         # Set Location header to point to the new resource
         response.headers["Location"] = f"/users/{user_id}/activities/{activity.id}"
 
+        # Merge activity instance fields with top-level fields
+        activity_data = activity.model_dump(exclude={"id", "activity_name"})
         return {
             "id": str(activity.id),
             "activity_type": request.activity_type_name,
             "activity_name": activity.activity_name,
             "created_at": db_activity.created_at.isoformat(),
-            "data": activity.model_dump(exclude={"id"})  # Exclude id since it's already at the top level
+            **activity_data  # Spread remaining activity fields at top level
         }
 
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{activity_id}", status_code=204)
+async def delete_activity(
+    user_id: UUID,
+    activity_id: UUID,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Delete an activity by its ID.
+    
+    Args:
+        user_id: UUID of the user
+        activity_id: UUID of the activity to delete
+        session: Database session dependency
+        
+    Returns:
+        No content on success
+        
+    Raises:
+        HTTPException: If activity not found
+    """
+    try:
+        # Query the database
+        stmt = select(ActivityModel).where(ActivityModel.id == activity_id)
+        result = await session.execute(stmt)
+        activity = result.scalar_one_or_none()
+        
+        if not activity:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Activity {activity_id} not found"
+            )
+            
+        # Delete the activity
+        await session.delete(activity)
+        await session.commit()
+        
+        # Return no content (204)
+        return None
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -142,9 +199,14 @@ async def get_activity(
             params=activity.params
         )
         
+        # Merge activity instance fields with top-level fields
+        activity_data = activity_instance.model_dump(exclude={"id", "activity_name"})
         return {
-            "user_id": str(user_id),
-            "activity": activity_instance.model_dump()
+            "id": str(activity.id),
+            "activity_type": activity.activity_type_name,
+            "activity_name": activity.activity_name,
+            "created_at": activity.created_at.isoformat(),
+            **activity_data  # Spread remaining activity fields at top level
         }
         
     except HTTPException:
