@@ -154,6 +154,7 @@ async def create_activity(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# noinspection DuplicatedCode
 @router.delete("/{activity_id}", status_code=204)
 async def delete_activity(
         user_id: UUID,
