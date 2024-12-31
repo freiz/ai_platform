@@ -1,4 +1,5 @@
 from typing import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -16,10 +17,10 @@ engine = create_async_engine(
 
 # Create session factory
 async_session_maker = async_sessionmaker(
-    engine, 
-    class_=AsyncSession, 
+    engine,
+    class_=AsyncSession,
     expire_on_commit=False,
-    autocommit=False, 
+    autocommit=False,
     autoflush=False
 )
 
@@ -40,4 +41,4 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
             await session.rollback()
             raise
         finally:
-            await session.close() 
+            await session.close()

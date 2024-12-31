@@ -28,10 +28,10 @@ router = APIRouter(
 
 @router.post("", status_code=201)
 async def create_workflow(
-    user_id: UUID,
-    request: CreateWorkflowRequest,
-    response: Response,
-    session: AsyncSession = Depends(get_session)
+        user_id: UUID,
+        request: CreateWorkflowRequest,
+        response: Response,
+        session: AsyncSession = Depends(get_session)
 ):
     """
     Create a new workflow for a user.
@@ -62,14 +62,25 @@ async def create_workflow(
         # Generate workflow ID
         workflow_id = uuid4()
 
+        # Convert connections to dictionaries with string UUIDs
+        connection_dicts = [
+            {
+                "source_activity_id": str(conn.source_activity_id),
+                "source_output": conn.source_output,
+                "target_activity_id": str(conn.target_activity_id),
+                "target_input": conn.target_input
+            }
+            for conn in request.connections
+        ]
+
         # Create database model
         db_workflow = WorkflowModel(
             id=workflow_id,
             workflow_name=request.workflow_name,
             activities=request.activities,
-            connections=[conn.model_dump() for conn in request.connections]
+            connections=connection_dicts
         )
-        
+
         try:
             # Save to database
             session.add(db_workflow)
@@ -90,7 +101,7 @@ async def create_workflow(
             "activities": {
                 name: str(uuid) for name, uuid in request.activities.items()
             },
-            "connections": [conn.model_dump() for conn in request.connections],
+            "connections": connection_dicts,
             "created_at": db_workflow.created_at.isoformat()
         }
 
@@ -104,9 +115,9 @@ async def create_workflow(
 
 @router.get("/{workflow_id}")
 async def get_workflow(
-    user_id: UUID,
-    workflow_id: UUID,
-    session: AsyncSession = Depends(get_session)
+        user_id: UUID,
+        workflow_id: UUID,
+        session: AsyncSession = Depends(get_session)
 ):
     """
     Get a workflow by its ID.
@@ -127,13 +138,13 @@ async def get_workflow(
         stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
         result = await session.execute(stmt)
         workflow = result.scalar_one_or_none()
-        
+
         if not workflow:
             raise HTTPException(
                 status_code=404,
                 detail=f"Workflow {workflow_id} not found"
             )
-            
+
         return {
             "id": str(workflow.id),
             "workflow_name": workflow.workflow_name,
@@ -143,8 +154,8 @@ async def get_workflow(
             "connections": workflow.connections,
             "created_at": workflow.created_at.isoformat()
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
