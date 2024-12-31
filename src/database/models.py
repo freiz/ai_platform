@@ -43,3 +43,32 @@ class ActivityModel(Base):
             f"type={self.activity_type_name}, "
             f"name={self.activity_name})"
         ) 
+
+
+class WorkflowModel(Base):
+    """SQLAlchemy model for storing workflows in the database."""
+    __tablename__ = "workflows"
+    __table_args__ = (
+        UniqueConstraint('workflow_name', name='uq_workflow_name'),
+    )
+
+    # Primary key
+    id: Mapped[UUID] = mapped_column(primary_key=True)
+    
+    # Basic workflow info
+    workflow_name: Mapped[str] = mapped_column(String(100), unique=True)
+    
+    # Store workflow structure as JSON
+    activities: Mapped[Dict[str, UUID]] = mapped_column(JSON)  # Map of activity name to UUID
+    connections: Mapped[Dict] = mapped_column(JSON)  # List of connections with activity UUIDs
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, 
+        default=datetime.utcnow, 
+        onupdate=datetime.utcnow
+    )
+
+    def __repr__(self) -> str:
+        return f"Workflow(id={self.id}, name={self.workflow_name})" 

@@ -1,4 +1,5 @@
 import json
+from uuid import UUID
 
 import pytest
 
@@ -42,16 +43,17 @@ class TestWorkflow:
 
         # Create workflow
         workflow = Workflow()
-        workflow.add_activity(str_len.activity_name, str_len)
-        workflow.add_activity(upper.activity_name, upper)
+        workflow.add_activity("uppercase", upper)  # First activity
+        workflow.add_activity("length", str_len)   # Second activity
 
-        # Connect activities
-        workflow.connect_activities(upper.activity_name, 'uppercase_text', str_len.activity_name, 'text')
+        # Connect activities using UUIDs - text input goes to uppercase, then uppercase output goes to length
+        workflow.connect_activities(upper.id, 'uppercase_text', str_len.id, 'text')
 
-        # Set input
+        # Set input - goes to the first activity (uppercase)
         input_data = {'text': 'hello'}
         result = workflow.run(input_data)
 
+        # Final output should be the length of the uppercase text
         assert result['length'] == 5
 
     def test_workflow_serialization(self):
@@ -76,33 +78,40 @@ class TestWorkflow:
             workflow.run({'text': 123})  # Wrong type (integer instead of string)
 
     def test_connection_model(self):
-        # Test creating a valid connection
+        # Test creating a valid connection with UUIDs
+        str_len = StringLengthActivity()
+        upper = UppercaseActivity()
+        
         connection = Connection(
-            source_activity_name="activity1",
-            source_output="output1",
-            target_activity_name="activity2",
-            target_input="input1"
+            source_activity_id=upper.id,
+            source_output="uppercase_text",
+            target_activity_id=str_len.id,
+            target_input="text"
         )
-        assert connection.source_activity_name == "activity1"
-        assert connection.source_output == "output1"
-        assert connection.target_activity_name == "activity2"
-        assert connection.target_input == "input1"
+        assert isinstance(connection.source_activity_id, UUID)
+        assert connection.source_output == "uppercase_text"
+        assert isinstance(connection.target_activity_id, UUID)
+        assert connection.target_input == "text"
 
         # Test connection serialization
         connection_dict = connection.model_dump()
-        assert connection_dict["source_activity_name"] == "activity1"
-        assert connection_dict["source_output"] == "output1"
-        assert connection_dict["target_activity_name"] == "activity2"
-        assert connection_dict["target_input"] == "input1"
+        assert str(connection_dict["source_activity_id"]) == str(upper.id)
+        assert connection_dict["source_output"] == "uppercase_text"
+        assert str(connection_dict["target_activity_id"]) == str(str_len.id)
+        assert connection_dict["target_input"] == "text"
 
     def test_connection_json_serialization(self):
         """Test Connection JSON serialization/deserialization."""
+        # Create activities to get UUIDs
+        str_len = StringLengthActivity()
+        upper = UppercaseActivity()
+        
         # Create a connection
         connection = Connection(
-            source_activity_name="source_activity",
-            source_output="output1",
-            target_activity_name="target_activity",
-            target_input="input1"
+            source_activity_id=upper.id,
+            source_output="uppercase_text",
+            target_activity_id=str_len.id,
+            target_input="text"
         )
 
         # Test serialization to JSON
@@ -112,9 +121,9 @@ class TestWorkflow:
         loaded_connection = Connection.model_validate_json(json_str)
 
         # Verify the deserialized object matches the original
-        assert loaded_connection.source_activity_name == connection.source_activity_name
+        assert str(loaded_connection.source_activity_id) == str(connection.source_activity_id)
         assert loaded_connection.source_output == connection.source_output
-        assert loaded_connection.target_activity_name == connection.target_activity_name
+        assert str(loaded_connection.target_activity_id) == str(connection.target_activity_id)
         assert loaded_connection.target_input == connection.target_input
 
     def test_workflow_json_serialization(self):
@@ -125,13 +134,13 @@ class TestWorkflow:
         # Add activities
         str_len = StringLengthActivity()
         upper = UppercaseActivity()
-        workflow.add_activity(str_len.activity_name, str_len)
-        workflow.add_activity(upper.activity_name, upper)
+        workflow.add_activity("uppercase", upper)  # First activity
+        workflow.add_activity("length", str_len)   # Second activity
 
-        # Add connection
+        # Add connection using UUIDs - uppercase output goes to length input
         workflow.connect_activities(
-            upper.activity_name, 'uppercase_text',
-            str_len.activity_name, 'text'
+            upper.id, 'uppercase_text',
+            str_len.id, 'text'
         )
 
         # Test serialization to JSON
@@ -140,21 +149,30 @@ class TestWorkflow:
         # Test deserialization from JSON
         data = json.loads(json_str)
 
-        # Reconstruct activities
+        # Create a mapping of activity names to their original UUIDs
+        activity_ids = {
+            name: UUID(activity_data['id']) 
+            for name, activity_data in data['activities'].items()
+        }
+
+        # Reconstruct activities with original UUIDs
         loaded_workflow = Workflow()
         for name, activity_data in data['activities'].items():
+            activity_id = activity_ids[name]
             if activity_data['activity_name'] == 'string_length':
                 activity = StringLengthActivity(activity_name=activity_data['activity_name'])
+                activity.id = activity_id  # Restore original UUID
             else:
                 activity = UppercaseActivity(activity_name=activity_data['activity_name'])
+                activity.id = activity_id  # Restore original UUID
             loaded_workflow.add_activity(name, activity)
 
         # Reconstruct connections
         for conn_data in data['connections']:
             loaded_workflow.connect_activities(
-                conn_data['source_activity_name'],
+                UUID(conn_data['source_activity_id']),
                 conn_data['source_output'],
-                conn_data['target_activity_name'],
+                UUID(conn_data['target_activity_id']),
                 conn_data['target_input']
             )
 
@@ -163,15 +181,16 @@ class TestWorkflow:
         for name, activity in workflow.activities.items():
             loaded_activity = loaded_workflow.activities[name]
             assert loaded_activity.activity_name == activity.activity_name
+            assert loaded_activity.id == activity.id  # Verify UUIDs match
             assert len(loaded_activity.input_params) == len(activity.input_params)
             assert len(loaded_activity.output_params) == len(activity.output_params)
 
         # Verify connections
         assert len(loaded_workflow.connections) == len(workflow.connections)
         for conn, loaded_conn in zip(workflow.connections, loaded_workflow.connections):
-            assert loaded_conn.source_activity_name == conn.source_activity_name
+            assert str(loaded_conn.source_activity_id) == str(conn.source_activity_id)
             assert loaded_conn.source_output == conn.source_output
-            assert loaded_conn.target_activity_name == conn.target_activity_name
+            assert str(loaded_conn.target_activity_id) == str(conn.target_activity_id)
             assert loaded_conn.target_input == conn.target_input
 
         # Test that the loaded workflow can still execute

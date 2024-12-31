@@ -1,4 +1,5 @@
 from typing import Dict, List, Any, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -10,14 +11,14 @@ class Connection(BaseModel):
     Represents a connection between two activities in a workflow.
     
     Attributes:
-        source_activity_name (str): Name of the source activity
+        source_activity_id (UUID): ID of the source activity
         source_output (str): Output parameter name of the source activity
-        target_activity_name (str): Name of the target activity
+        target_activity_id (UUID): ID of the target activity
         target_input (str): Input parameter name of the target activity
     """
-    source_activity_name: str
+    source_activity_id: UUID
     source_output: str
-    target_activity_name: str
+    target_activity_id: UUID
     target_input: str
 
 
@@ -49,28 +50,38 @@ class Workflow(BaseModel):
         self.activities[name] = activity
 
     def connect_activities(self,
-                           source_activity_name: str,
+                           source_activity_id: UUID,
                            source_output: str,
-                           target_activity_name: str,
+                           target_activity_id: UUID,
                            target_input: str):
         """
         Connect two activities by mapping an output to an input.
         
         Args:
-            source_activity_name (str): Name of the source activity
+            source_activity_id (UUID): ID of the source activity
             source_output (str): Output parameter name of the source activity
-            target_activity_name (str): Name of the target activity
+            target_activity_id (UUID): ID of the target activity
             target_input (str): Input parameter name of the target activity
         
         Raises:
             ValueError: If activities or parameters are not found
         """
-        # Find source and target activities
-        if source_activity_name not in self.activities or target_activity_name not in self.activities:
+        # Find source and target activities by ID
+        source_activity = None
+        target_activity = None
+        source_name = None
+        target_name = None
+        
+        for name, activity in self.activities.items():
+            if activity.id == source_activity_id:
+                source_activity = activity
+                source_name = name
+            if activity.id == target_activity_id:
+                target_activity = activity
+                target_name = name
+                
+        if not source_activity or not target_activity:
             raise ValueError("Activity not found")
-
-        source_activity = self.activities[source_activity_name]
-        target_activity = self.activities[target_activity_name]
 
         # Validate output and input parameters
         if source_output not in source_activity.output_params:
@@ -89,9 +100,9 @@ class Workflow(BaseModel):
 
         # Add connection
         connection = Connection(
-            source_activity_name=source_activity_name,
+            source_activity_id=source_activity_id,
             source_output=source_output,
-            target_activity_name=target_activity_name,
+            target_activity_id=target_activity_id,
             target_input=target_input
         )
         self.connections.append(connection)
@@ -106,6 +117,9 @@ class Workflow(BaseModel):
         Returns:
             Dict[str, Any]: Final outputs of the workflow
         """
+        # Create a mapping of activity IDs to names
+        id_to_name = {activity.id: name for name, activity in self.activities.items()}
+
         # Topological sort of activities based on connections
         sorted_activities = self._topological_sort()
 
@@ -113,27 +127,30 @@ class Workflow(BaseModel):
         activity_outputs: Dict[str, Dict[str, Any]] = {}
 
         # Run activities in order
-        for activity in sorted_activities:
+        for activity_name in sorted_activities:
+            activity = self.activities[activity_name]
             # Prepare inputs for this activity
             activity_inputs = {}
 
             # If it's the first activity and initial inputs are provided
-            if activity == sorted_activities[0] and initial_inputs:
+            if activity_name == sorted_activities[0] and initial_inputs:
                 activity_inputs.update(initial_inputs)
 
             # Check connections to fill inputs
             for connection in self.connections:
-                if connection.target_activity_name == activity:
-                    source_activity_name = connection.source_activity_name
+                source_name = id_to_name[connection.source_activity_id]
+                target_name = id_to_name[connection.target_activity_id]
+                
+                if target_name == activity_name:
                     source_output = connection.source_output
                     target_input = connection.target_input
 
                     # Use output from previous activity as input
-                    activity_inputs[target_input] = activity_outputs[source_activity_name][source_output]
+                    activity_inputs[target_input] = activity_outputs[source_name][source_output]
 
             # Run the activity
-            outputs = self.activities[activity](**activity_inputs)
-            activity_outputs[activity] = outputs
+            outputs = activity(**activity_inputs)
+            activity_outputs[activity_name] = outputs
 
         # Return outputs of the last activity
         return activity_outputs[sorted_activities[-1]]
@@ -148,17 +165,22 @@ class Workflow(BaseModel):
         Raises:
             ValueError: If a cyclic dependency is detected
         """
+        # Create a mapping of activity IDs to names
+        id_to_name = {activity.id: name for name, activity in self.activities.items()}
+        
         # Create adjacency list and in-degree map
-        graph = {activity: [] for activity in self.activities}
-        in_degree = {activity: 0 for activity in self.activities}
+        graph = {name: [] for name in self.activities}
+        in_degree = {name: 0 for name in self.activities}
 
         # Build graph based on connections
         for connection in self.connections:
-            graph[connection.source_activity_name].append(connection.target_activity_name)
-            in_degree[connection.target_activity_name] += 1
+            source_name = id_to_name[connection.source_activity_id]
+            target_name = id_to_name[connection.target_activity_id]
+            graph[source_name].append(target_name)
+            in_degree[target_name] += 1
 
         # Perform topological sort
-        queue = [activity for activity in self.activities if in_degree[activity] == 0]
+        queue = [name for name in self.activities if in_degree[name] == 0]
         sorted_activities = []
 
         while queue:
@@ -166,13 +188,10 @@ class Workflow(BaseModel):
             sorted_activities.append(current_activity)
 
             # Find connected activities
-            for connection in self.connections:
-                if connection.source_activity_name == current_activity:
-                    target_activity = connection.target_activity_name
-                    in_degree[target_activity] -= 1
-
-                    if in_degree[target_activity] == 0:
-                        queue.append(target_activity)
+            for target_name in graph[current_activity]:
+                in_degree[target_name] -= 1
+                if in_degree[target_name] == 0:
+                    queue.append(target_name)
 
         # Check for cyclic dependencies
         if len(sorted_activities) != len(self.activities):
