@@ -112,15 +112,15 @@ class Workflow(BaseModel):
         )
         self.connections.append(connection)
 
-    def run(self, initial_inputs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def run(self, inputs: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
         """
-        Execute the workflow with optional initial inputs.
+        Execute the workflow with inputs for root nodes.
         
         Args:
-            initial_inputs (Optional[Dict[str, Any]]): Initial inputs for the first node
+            inputs (Dict[str, Dict[str, Any]]): Map of node_id to input parameters for root nodes
         
         Returns:
-            Dict[str, Any]: Final outputs of the workflow
+            Dict[str, Dict[str, Any]]: Map of node_id to output parameters for leaf nodes
         """
         # Topological sort of nodes based on connections
         sorted_nodes = self._topological_sort()
@@ -134,9 +134,9 @@ class Workflow(BaseModel):
             # Prepare inputs for this node
             node_inputs = {}
 
-            # If it's the first node and initial inputs are provided
-            if node_id == sorted_nodes[0] and initial_inputs:
-                node_inputs.update(initial_inputs)
+            # If this is a root node, get inputs from the inputs map
+            if node_id in inputs:
+                node_inputs.update(inputs[node_id])
 
             # Check connections to fill inputs
             for connection in self.connections:
@@ -151,8 +151,19 @@ class Workflow(BaseModel):
             outputs = node.activity(**node_inputs)
             node_outputs[node_id] = outputs
 
-        # Return outputs of the last node
-        return node_outputs[sorted_nodes[-1]]
+        # Find leaf nodes (nodes that are never source nodes in connections)
+        source_nodes = {conn.source_node for conn in self.connections}
+        leaf_nodes = set(self.nodes.keys()) - source_nodes
+
+        # Special case: single node is both root and leaf
+        if len(self.nodes) == 1:
+            leaf_nodes.add(next(iter(self.nodes)))
+
+        # Return outputs from all leaf nodes
+        return {
+            node_id: node_outputs[node_id]
+            for node_id in leaf_nodes
+        }
 
     def _topological_sort(self) -> List[str]:
         """

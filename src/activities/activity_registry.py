@@ -92,8 +92,8 @@ class ActivityRegistry:
 
     @classmethod
     def create_activity(cls,
-                       activity_type_name: str,
-                       params: Dict[str, Any]) -> Activity:
+                        activity_type_name: str,
+                        params: Dict[str, Any]) -> Activity:
         """
         Create an instance of a registered activity type.
         
@@ -172,11 +172,29 @@ class ActivityRegistry:
         return cls._registry[activity_type_name]
 
     @classmethod
-    def register_activity(cls, 
-                        activity_type_name: str,
-                        description: str,
-                        required_params: Optional[Dict[str, Parameter]] = None,
-                        allow_custom_params: bool = False):
+    def get_activity_class(cls, activity_type_name: str) -> Type[Activity]:
+        """
+        Get the activity class for a specific activity type.
+        
+        Args:
+            activity_type_name: Name of the registered activity type
+            
+        Returns:
+            The activity class
+            
+        Raises:
+            ValueError: If activity type not found
+        """
+        if activity_type_name not in cls._registry:
+            raise ValueError(f"Activity type {activity_type_name} not found")
+        return cls._registry[activity_type_name].activity_type
+
+    @classmethod
+    def register_activity(cls,
+                          activity_type_name: str,
+                          description: str,
+                          required_params: Optional[Dict[str, Parameter]] = None,
+                          allow_custom_params: bool = False):
         """
         Class decorator for registering activities.
         
@@ -189,6 +207,7 @@ class ActivityRegistry:
         Returns:
             The decorated activity class
         """
+
         def decorator(activity_cls: Type[Activity]):
             # Store registration info on the class itself
             activity_cls._registration_info = {
@@ -200,6 +219,7 @@ class ActivityRegistry:
                 "allow_custom_params": allow_custom_params
             }
             return activity_cls
+
         return decorator
 
     @classmethod
@@ -209,7 +229,7 @@ class ActivityRegistry:
             raise ValueError(
                 f"Class {activity_cls.__name__} has no registration info. Did you forget the @register_activity decorator?"
             )
-        
+
         info = activity_cls._registration_info
         cls.register(
             activity_name=info["activity_type_name"],

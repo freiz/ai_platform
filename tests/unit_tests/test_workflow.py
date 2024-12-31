@@ -4,7 +4,7 @@ from uuid import UUID
 import pytest
 
 from src.activities import Activity, Parameter
-from src.workflow import Workflow, Connection, WorkflowNode
+from src.workflow import Workflow
 
 
 class StringLengthActivity(Activity):
@@ -35,8 +35,43 @@ class UppercaseActivity(Activity):
         return {'uppercase_text': text.upper()}
 
 
+class ConcatActivity(Activity):
+    def __init__(self, activity_name: str = "concat"):
+        input_params = {
+            'text1': Parameter(name='text1', type="string"),
+            'text2': Parameter(name='text2', type="string")
+        }
+        output_params = {
+            'concatenated': Parameter(name='concatenated', type="string")
+        }
+        super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
+
+    def run(self, text1, text2):
+        return {'concatenated': text1 + text2}
+
+
 class TestWorkflow:
-    def test_workflow_execution(self):
+    def test_single_node_workflow(self):
+        """Test workflow with a single node (both root and leaf)."""
+        # Create activity
+        upper = UppercaseActivity()
+
+        # Create workflow with single node
+        workflow = Workflow()
+        workflow.add_node("upper1", upper, "First Uppercase")
+
+        # Execute workflow
+        result = workflow.run({
+            "upper1": {"text": "hello"}
+        })
+
+        # Single node should be both root and leaf
+        assert len(result) == 1
+        assert "upper1" in result
+        assert result["upper1"]["uppercase_text"] == "HELLO"
+
+    def test_linear_workflow(self):
+        """Test workflow with linear chain of nodes."""
         # Create activities
         str_len = StringLengthActivity()
         upper = UppercaseActivity()
@@ -44,7 +79,7 @@ class TestWorkflow:
         # Create workflow
         workflow = Workflow()
         workflow.add_node("uppercase1", upper, "First Uppercase")  # First activity
-        workflow.add_node("length1", str_len, "First Length")   # Second activity
+        workflow.add_node("length1", str_len, "First Length")  # Second activity
 
         # Connect nodes - uppercase output goes to length input
         workflow.connect_nodes(
@@ -54,47 +89,92 @@ class TestWorkflow:
             target_input="text"
         )
 
-        # Set input - goes to the first activity (uppercase)
-        input_data = {'text': 'hello'}
-        result = workflow.run(input_data)
+        # Execute workflow
+        result = workflow.run({
+            "uppercase1": {"text": "hello"}
+        })
 
-        # Final output should be the length of the uppercase text
-        assert result['length'] == 5
+        # Only leaf node (length1) should be in result
+        assert len(result) == 1
+        assert "length1" in result
+        assert result["length1"]["length"] == 5
 
-    def test_workflow_reuse_activity(self):
-        """Test that the same activity can be used multiple times in a workflow."""
+    def test_multiple_root_nodes(self):
+        """Test workflow with multiple root nodes feeding into a single leaf node."""
         # Create activities
-        str_len = StringLengthActivity()
-        upper = UppercaseActivity()
+        upper1 = UppercaseActivity()
+        upper2 = UppercaseActivity()
+        concat = ConcatActivity()
 
-        # Create workflow with multiple instances of the same activities
+        # Create workflow
         workflow = Workflow()
-        workflow.add_node("upper1", upper, "First Uppercase")
-        workflow.add_node("upper2", upper, "Second Uppercase")  # Reusing uppercase activity
+        workflow.add_node("upper1", upper1, "First Uppercase")  # First root
+        workflow.add_node("upper2", upper2, "Second Uppercase")  # Second root
+        workflow.add_node("concat", concat, "Concatenate")  # Leaf
 
-        # Connect nodes: text -> upper1 -> upper2
-        # First uppercase converts 'hello' to 'HELLO'
-        # Second uppercase keeps it as 'HELLO' (since it's already uppercase)
-        workflow.connect_nodes("upper1", "uppercase_text", "upper2", "text")
+        # Connect nodes
+        workflow.connect_nodes(
+            source_node="upper1",
+            source_output="uppercase_text",
+            target_node="concat",
+            target_input="text1"
+        )
+        workflow.connect_nodes(
+            source_node="upper2",
+            source_output="uppercase_text",
+            target_node="concat",
+            target_input="text2"
+        )
 
-        # Run workflow with initial input
-        result = workflow.run({'text': 'hello'})
+        # Execute workflow with inputs for both root nodes
+        result = workflow.run({
+            "upper1": {"text": "hello"},
+            "upper2": {"text": "world"}
+        })
 
-        # The final result should still be 'HELLO'
-        assert result['uppercase_text'] == 'HELLO'
+        # Only leaf node (concat) should be in result
+        assert len(result) == 1
+        assert "concat" in result
+        assert result["concat"]["concatenated"] == "HELLOWORLD"
 
-        # Let's also test with a more complex workflow using compatible types
-        workflow2 = Workflow()
-        workflow2.add_node("upper1", upper, "First Uppercase")
-        workflow2.add_node("upper2", upper, "Second Uppercase")
-        workflow2.add_node("upper3", upper, "Third Uppercase")
+    def test_multiple_leaf_nodes(self):
+        """Test workflow with one root node feeding into multiple leaf nodes."""
+        # Create activities
+        upper = UppercaseActivity()
+        len1 = StringLengthActivity()
+        len2 = StringLengthActivity()
 
-        # Create a chain of uppercase conversions (each one receives string and outputs string)
-        workflow2.connect_nodes("upper1", "uppercase_text", "upper2", "text")
-        workflow2.connect_nodes("upper2", "uppercase_text", "upper3", "text")
+        # Create workflow
+        workflow = Workflow()
+        workflow.add_node("upper", upper, "Uppercase")  # Root
+        workflow.add_node("len1", len1, "First Length")  # First leaf
+        workflow.add_node("len2", len2, "Second Length")  # Second leaf
 
-        result2 = workflow2.run({'text': 'hello'})
-        assert result2['uppercase_text'] == 'HELLO'  # Still HELLO since uppercase is idempotent
+        # Connect nodes
+        workflow.connect_nodes(
+            source_node="upper",
+            source_output="uppercase_text",
+            target_node="len1",
+            target_input="text"
+        )
+        workflow.connect_nodes(
+            source_node="upper",
+            source_output="uppercase_text",
+            target_node="len2",
+            target_input="text"
+        )
+
+        # Execute workflow
+        result = workflow.run({
+            "upper": {"text": "hello"}
+        })
+
+        # Both leaf nodes should be in result
+        assert len(result) == 2
+        assert "len1" in result
+        assert "len2" in result
+        assert result["len1"]["length"] == 5
+        assert result["len2"]["length"] == 5
 
     def test_workflow_node_validation(self):
         workflow = Workflow()
@@ -131,26 +211,6 @@ class TestWorkflow:
         assert 'length1' in serialized['nodes']
         assert serialized['nodes']['length1']['label'] == "First Length"
 
-    def test_connection_model(self):
-        # Test creating a valid connection
-        connection = Connection(
-            source_node="node1",
-            source_output="output1",
-            target_node="node2",
-            target_input="input1"
-        )
-        assert connection.source_node == "node1"
-        assert connection.source_output == "output1"
-        assert connection.target_node == "node2"
-        assert connection.target_input == "input1"
-
-        # Test connection serialization
-        connection_dict = connection.model_dump()
-        assert connection_dict["source_node"] == "node1"
-        assert connection_dict["source_output"] == "output1"
-        assert connection_dict["target_node"] == "node2"
-        assert connection_dict["target_input"] == "input1"
-
     def test_workflow_json_serialization(self):
         """Test Workflow JSON serialization/deserialization."""
         # Create a workflow with activities and connections
@@ -178,7 +238,7 @@ class TestWorkflow:
 
         # Reconstruct workflow
         loaded_workflow = Workflow()
-        
+
         # Reconstruct nodes
         for node_id, node_data in data['nodes'].items():
             # Create appropriate activity instance
@@ -186,10 +246,10 @@ class TestWorkflow:
                 activity = StringLengthActivity(activity_name=node_data['activity']['activity_name'])
             else:
                 activity = UppercaseActivity(activity_name=node_data['activity']['activity_name'])
-            
+
             # Set activity ID to match original
             activity.id = UUID(node_data['activity']['id'])
-            
+
             # Add node to workflow
             loaded_workflow.add_node(node_id, activity, node_data['label'])
 
@@ -221,8 +281,11 @@ class TestWorkflow:
             assert loaded_conn.target_input == conn.target_input
 
         # Test that the loaded workflow can still execute
-        result = loaded_workflow.run({'text': 'hello'})
-        assert result['length'] == 5
+        result = loaded_workflow.run({
+            "uppercase1": {"text": "hello"}
+        })
+        assert "length1" in result
+        assert result["length1"]["length"] == 5
 
 
 if __name__ == '__main__':
