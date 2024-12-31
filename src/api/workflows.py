@@ -1,4 +1,4 @@
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException, Depends, Response
@@ -7,8 +7,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.activities.activity_registry import ActivityRegistry
 from src.database.connection import get_session
 from src.database.models import WorkflowModel, ActivityModel
+from src.workflow import Workflow
 
 
 class WorkflowNodeCreate(BaseModel):
@@ -35,6 +37,11 @@ class CreateWorkflowRequest(BaseModel):
         super().__init__(**data)
         if self.connections is None:
             self.connections = []
+
+
+class WorkflowExecuteRequest(BaseModel):
+    """Request model for executing a workflow."""
+    inputs: Dict[str, Dict[str, Any]]  # Map of node_id to input parameters
 
 
 def validate_workflow_structure(
@@ -382,6 +389,122 @@ async def delete_workflow(
 
         # Return no content (204)
         return None
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{workflow_id}/execute")
+async def execute_workflow(
+        user_id: UUID,
+        workflow_id: UUID,
+        request: WorkflowExecuteRequest,
+        session: AsyncSession = Depends(get_session)
+):
+    """
+    Execute a workflow with the given input values.
+    
+    Args:
+        user_id: UUID of the user
+        workflow_id: UUID of the workflow to execute
+        request: The workflow execution request containing:
+            - inputs: Map of node_id to input parameters for root nodes
+        session: Database session dependency
+            
+    Returns:
+        The outputs from all leaf nodes
+        
+    Raises:
+        HTTPException: If workflow not found, activities not found, or execution fails
+    """
+    try:
+        # Query the workflow
+        stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
+        result = await session.execute(stmt)
+        workflow_model = result.scalar_one_or_none()
+
+        if not workflow_model:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow {workflow_id} not found"
+            )
+
+        # Create workflow instance
+        workflow = Workflow()
+
+        # Load activities and create nodes
+        for node_id, node_data in workflow_model.nodes.items():
+            # Get activity model
+            stmt = select(ActivityModel).where(ActivityModel.id == UUID(node_data['activity_id']))
+            result = await session.execute(stmt)
+            activity_model = result.scalar_one_or_none()
+            if not activity_model:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Activity {node_data['activity_id']} not found"
+                )
+
+            # Create activity instance
+            activity_class = ActivityRegistry.get_activity_class(activity_model.activity_type_name)
+            activity = activity_class(
+                activity_name=activity_model.activity_name,
+                input_params=activity_model.input_params_schema,
+                output_params=activity_model.output_params_schema
+            )
+            activity.id = UUID(node_data['activity_id'])
+
+            # Add node to workflow
+            workflow.add_node(node_id, activity, node_data['label'])
+
+        # Add connections
+        for conn in workflow_model.connections:
+            workflow.connect_nodes(
+                source_node=conn['source_node'],
+                source_output=conn['source_output'],
+                target_node=conn['target_node'],
+                target_input=conn['target_input']
+            )
+
+        # Find root and leaf nodes
+        activities = {}  # Store activity models for validation
+        for node_id, node_data in workflow_model.nodes.items():
+            stmt = select(ActivityModel).where(ActivityModel.id == UUID(node_data['activity_id']))
+            result = await session.execute(stmt)
+            activity_model = result.scalar_one_or_none()
+            activities[str(activity_model.id)] = activity_model
+
+        root_nodes, leaf_nodes = validate_workflow_structure(
+            {node_id: WorkflowNodeCreate(activity_id=UUID(node['activity_id']), label=node['label'])
+             for node_id, node in workflow_model.nodes.items()},
+            [WorkflowConnectionCreate(**conn) for conn in workflow_model.connections],
+            activities
+        )
+
+        # Validate inputs for root nodes
+        for node_id in root_nodes:
+            if node_id not in request.inputs:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Missing inputs for root node {node_id}"
+                )
+
+        # Execute workflow
+        try:
+            node_outputs = workflow.run(request.inputs)
+
+            # Return outputs from leaf nodes
+            return {
+                node_id: node_outputs[node_id]
+                for node_id in leaf_nodes
+            }
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Workflow execution failed: {str(e)}"
+            )
 
     except HTTPException:
         raise
