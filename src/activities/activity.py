@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Literal
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
@@ -67,10 +68,12 @@ class Activity(BaseModel, ABC):
     Abstract base class for creating extensible activities with input and output parameters.
     
     Attributes:
+        id (UUID): Unique identifier for the activity instance
         activity_name (str): Name of the activity
         input_params (Dict[str, Parameter]): Input parameters for the activity
         output_params (Dict[str, Parameter]): Output parameters for the activity
     """
+    id: UUID = Field(default_factory=uuid4)
     activity_name: str
     input_params: Dict[str, Parameter] = Field(default_factory=dict)
     output_params: Dict[str, Parameter] = Field(default_factory=dict)

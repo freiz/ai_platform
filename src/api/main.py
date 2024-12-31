@@ -3,13 +3,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.activities import router as activities_router
 from src.api.activity_types import router as activity_types_router, register_activities
+from src.database.connection import init_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for FastAPI application."""
-    # Startup: Register all activities
+    # Startup: Initialize database and register activities
+    await init_db()
     register_activities()
     yield
     # Shutdown: Clean up if needed
@@ -34,6 +37,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(activity_types_router)
+app.include_router(activities_router)
 
 
 # Root endpoint
