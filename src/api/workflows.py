@@ -29,8 +29,12 @@ class CreateWorkflowRequest(BaseModel):
     """Request model for creating a workflow."""
     workflow_name: str
     nodes: Dict[str, WorkflowNodeCreate]  # Map of node_id to node info
-    connections: Optional[List[WorkflowConnectionCreate]] = Field(
-        default_factory=list)  # Optional connections between nodes
+    connections: List[WorkflowConnectionCreate] | None = None  # Optional connections between nodes
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        if self.connections is None:
+            self.connections = []
 
 
 # Create router for user workflows
