@@ -448,11 +448,19 @@ async def execute_workflow(
 
             # Create activity instance
             activity_class = ActivityRegistry.get_activity_class(activity_model.activity_type_name)
-            activity = activity_class(
-                activity_name=activity_model.activity_name,
-                input_params=activity_model.input_params_schema,
-                output_params=activity_model.output_params_schema
-            )
+            activity_type_info = ActivityRegistry.get_activity_type(activity_model.activity_type_name)
+            
+            # Only pass input/output params if activity allows custom params
+            activity_params = {
+                "activity_name": activity_model.activity_name,
+            }
+            if activity_type_info.allow_custom_params:
+                activity_params.update({
+                    "input_params": activity_model.input_params_schema,
+                    "output_params": activity_model.output_params_schema
+                })
+            
+            activity = activity_class(**activity_params)
             activity.id = UUID(node_data['activity_id'])
 
             # Add node to workflow
@@ -467,38 +475,12 @@ async def execute_workflow(
                 target_input=conn['target_input']
             )
 
-        # Find root and leaf nodes
-        activities = {}  # Store activity models for validation
-        for node_id, node_data in workflow_model.nodes.items():
-            stmt = select(ActivityModel).where(ActivityModel.id == UUID(node_data['activity_id']))
-            result = await session.execute(stmt)
-            activity_model = result.scalar_one_or_none()
-            activities[str(activity_model.id)] = activity_model
-
-        root_nodes, leaf_nodes = validate_workflow_structure(
-            {node_id: WorkflowNodeCreate(activity_id=UUID(node['activity_id']), label=node['label'])
-             for node_id, node in workflow_model.nodes.items()},
-            [WorkflowConnectionCreate(**conn) for conn in workflow_model.connections],
-            activities
-        )
-
-        # Validate inputs for root nodes
-        for node_id in root_nodes:
-            if node_id not in request.inputs:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Missing inputs for root node {node_id}"
-                )
-
         # Execute workflow
         try:
             node_outputs = workflow.run(request.inputs)
 
-            # Return outputs from leaf nodes
-            return {
-                node_id: node_outputs[node_id]
-                for node_id in leaf_nodes
-            }
+            # Return all node outputs
+            return node_outputs
 
         except Exception as e:
             raise HTTPException(

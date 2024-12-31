@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Literal
+from typing import Any, Dict, Optional, Literal, ClassVar
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -78,8 +78,32 @@ class Activity(BaseModel, ABC):
     input_params: Dict[str, Parameter] = Field(default_factory=dict)
     output_params: Dict[str, Parameter] = Field(default_factory=dict)
 
+    # Class-level parameter definitions for fixed parameter activities
+    fixed_input_params: ClassVar[Dict[str, Parameter]] = {}
+    fixed_output_params: ClassVar[Dict[str, Parameter]] = {}
+
     class Config:
         arbitrary_types_allowed = True
+
+    def __init__(self, activity_name: str, input_params: Optional[Dict[str, Parameter]] = None, 
+                 output_params: Optional[Dict[str, Parameter]] = None, **kwargs):
+        """
+        Initialize an activity with its parameters.
+        For fixed parameter activities (allow_custom_params=False), parameters are taken from class-level definitions.
+        For customizable activities (allow_custom_params=True), parameters are passed through constructor.
+        """
+        # Get parameters from class-level definitions if not provided
+        if input_params is None and self.fixed_input_params:
+            input_params = self.fixed_input_params
+        if output_params is None and self.fixed_output_params:
+            output_params = self.fixed_output_params
+
+        super().__init__(
+            activity_name=activity_name,
+            input_params=input_params or {},
+            output_params=output_params or {},
+            **kwargs
+        )
 
     def validate_inputs(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """

@@ -15,6 +15,8 @@ class ActivityTypeInfo(BaseModel):
         required_params: Additional parameters required to instantiate the activity
         description: Human-readable description of what the activity does
         allow_custom_params: If True, input/output params can be defined per instance
+        input_params: Fixed input parameters for activities with allow_custom_params=False
+        output_params: Fixed output parameters for activities with allow_custom_params=False
     """
     model_config = {
         'arbitrary_types_allowed': True,
@@ -25,6 +27,8 @@ class ActivityTypeInfo(BaseModel):
     required_params: Dict[str, Parameter]
     description: str
     allow_custom_params: bool = False
+    input_params: Optional[Dict[str, Parameter]] = None
+    output_params: Optional[Dict[str, Parameter]] = None
 
 
 class ActivityRegistry:
@@ -82,12 +86,21 @@ class ActivityRegistry:
         if activity_name in cls._registry:
             raise ValueError(f"Activity type {activity_name} already registered")
 
+        # For activities with fixed parameters, get them from class-level definitions
+        input_params = None
+        output_params = None
+        if not allow_custom_params:
+            input_params = activity_type.fixed_input_params
+            output_params = activity_type.fixed_output_params
+
         cls._registry[activity_name] = ActivityTypeInfo(
             activity_type_name=activity_name,
             activity_type=activity_type,
             required_params=required_params,
             description=description,
-            allow_custom_params=allow_custom_params
+            allow_custom_params=allow_custom_params,
+            input_params=input_params,
+            output_params=output_params
         )
 
     @classmethod
