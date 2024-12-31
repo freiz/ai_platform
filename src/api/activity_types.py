@@ -3,6 +3,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException
 
 from src.activities.activity_registry import ActivityRegistry, ActivityTypeInfo
+from src.activities.adder_activity import AdderActivity
 from src.activities.llm_activity import LLMActivity
 
 # Create router instead of app
@@ -16,6 +17,7 @@ def register_activities():
     """Register all available activities. Called during application startup."""
     try:
         ActivityRegistry.register_class(LLMActivity)
+        ActivityRegistry.register_class(AdderActivity)
     except ValueError as e:
         # If already registered, we can ignore
         if "already registered" not in str(e):

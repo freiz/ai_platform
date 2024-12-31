@@ -15,6 +15,8 @@ class ActivityTypeInfo(BaseModel):
         required_params: Additional parameters required to instantiate the activity
         description: Human-readable description of what the activity does
         allow_custom_params: If True, input/output params can be defined per instance
+        input_params: Fixed input parameters for activities with allow_custom_params=False
+        output_params: Fixed output parameters for activities with allow_custom_params=False
     """
     model_config = {
         'arbitrary_types_allowed': True,
@@ -25,6 +27,8 @@ class ActivityTypeInfo(BaseModel):
     required_params: Dict[str, Parameter]
     description: str
     allow_custom_params: bool = False
+    input_params: Optional[Dict[str, Parameter]] = None
+    output_params: Optional[Dict[str, Parameter]] = None
 
 
 class ActivityRegistry:
@@ -82,18 +86,27 @@ class ActivityRegistry:
         if activity_name in cls._registry:
             raise ValueError(f"Activity type {activity_name} already registered")
 
+        # For activities with fixed parameters, get them from class-level definitions
+        input_params = None
+        output_params = None
+        if not allow_custom_params:
+            input_params = activity_type.fixed_input_params
+            output_params = activity_type.fixed_output_params
+
         cls._registry[activity_name] = ActivityTypeInfo(
             activity_type_name=activity_name,
             activity_type=activity_type,
             required_params=required_params,
             description=description,
-            allow_custom_params=allow_custom_params
+            allow_custom_params=allow_custom_params,
+            input_params=input_params,
+            output_params=output_params
         )
 
     @classmethod
     def create_activity(cls,
-                       activity_type_name: str,
-                       params: Dict[str, Any]) -> Activity:
+                        activity_type_name: str,
+                        params: Dict[str, Any]) -> Activity:
         """
         Create an instance of a registered activity type.
         
@@ -172,11 +185,29 @@ class ActivityRegistry:
         return cls._registry[activity_type_name]
 
     @classmethod
-    def register_activity(cls, 
-                        activity_type_name: str,
-                        description: str,
-                        required_params: Optional[Dict[str, Parameter]] = None,
-                        allow_custom_params: bool = False):
+    def get_activity_class(cls, activity_type_name: str) -> Type[Activity]:
+        """
+        Get the activity class for a specific activity type.
+        
+        Args:
+            activity_type_name: Name of the registered activity type
+            
+        Returns:
+            The activity class
+            
+        Raises:
+            ValueError: If activity type not found
+        """
+        if activity_type_name not in cls._registry:
+            raise ValueError(f"Activity type {activity_type_name} not found")
+        return cls._registry[activity_type_name].activity_type
+
+    @classmethod
+    def register_activity(cls,
+                          activity_type_name: str,
+                          description: str,
+                          required_params: Optional[Dict[str, Parameter]] = None,
+                          allow_custom_params: bool = False):
         """
         Class decorator for registering activities.
         
@@ -189,6 +220,7 @@ class ActivityRegistry:
         Returns:
             The decorated activity class
         """
+
         def decorator(activity_cls: Type[Activity]):
             # Store registration info on the class itself
             activity_cls._registration_info = {
@@ -200,6 +232,7 @@ class ActivityRegistry:
                 "allow_custom_params": allow_custom_params
             }
             return activity_cls
+
         return decorator
 
     @classmethod
@@ -209,7 +242,7 @@ class ActivityRegistry:
             raise ValueError(
                 f"Class {activity_cls.__name__} has no registration info. Did you forget the @register_activity decorator?"
             )
-        
+
         info = activity_cls._registration_info
         cls.register(
             activity_name=info["activity_type_name"],
