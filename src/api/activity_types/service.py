@@ -1,19 +1,13 @@
-from typing import Dict, Optional
+from typing import Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 
 from src.activities.activity_registry import ActivityRegistry, ActivityTypeInfo
 from src.activities.adder_activity import AdderActivity
 from src.activities.llm_activity import LLMActivity
 
-# Create router instead of app
-router = APIRouter(
-    prefix="/activity-types",
-    tags=["activity-types"]
-)
 
-
-def register_activities():
+def register_activities() -> None:
     """Register all available activities. Called during application startup."""
     try:
         ActivityRegistry.register_class(LLMActivity)
@@ -24,8 +18,7 @@ def register_activities():
             raise
 
 
-@router.get("", response_model=Dict[str, ActivityTypeInfo])
-async def get_activity_types(search: Optional[str] = None):
+def get_activity_types(search: str | None = None) -> Dict[str, ActivityTypeInfo]:
     """
     Get all registered activity types.
     
@@ -47,8 +40,7 @@ async def get_activity_types(search: Optional[str] = None):
     return activity_types
 
 
-@router.get("/{activity_type_name}", response_model=ActivityTypeInfo)
-async def get_activity_type(activity_type_name: str):
+def get_activity_type(activity_type_name: str) -> ActivityTypeInfo:
     """
     Get activity type info by name.
     
@@ -64,4 +56,4 @@ async def get_activity_type(activity_type_name: str):
     try:
         return ActivityRegistry().get_activity_type(activity_type_name)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) 
