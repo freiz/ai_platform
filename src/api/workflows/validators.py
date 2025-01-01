@@ -1,5 +1,4 @@
 from typing import Dict, List, Set, Tuple
-from uuid import UUID
 
 from src.database.models import ActivityModel
 from .schemas import WorkflowNodeCreate, WorkflowConnectionCreate
@@ -116,4 +115,4 @@ def validate_workflow_structure(
     if disconnected_nodes and len(nodes) > 1:
         raise ValueError(f"Nodes are disconnected from the workflow: {', '.join(disconnected_nodes)}")
 
-    return root_nodes, leaf_nodes 
+    return root_nodes, leaf_nodes

@@ -20,7 +20,10 @@ class Workflow(BaseModel):
         nodes (Dict[str, WorkflowNode]): Dictionary of nodes in the workflow, keyed by node ID
         connections (List[Connection]): Connections between nodes
     """
+
+    # noinspection PyDataclass
     nodes: Dict[str, WorkflowNode] = Field(default_factory=dict)
+    # noinspection PyDataclass
     connections: List[Connection] = Field(default_factory=list)
 
     class Config:
@@ -42,10 +45,10 @@ class Workflow(BaseModel):
         )
 
     def connect_nodes(self,
-                     source_node: str,
-                     source_output: str,
-                     target_node: str,
-                     target_input: str) -> None:
+                      source_node: str,
+                      source_output: str,
+                      target_node: str,
+                      target_input: str) -> None:
         """
         Connect two nodes by mapping an output to an input.
         
@@ -186,4 +189,4 @@ class Workflow(BaseModel):
         if len(sorted_nodes) != len(self.nodes):
             raise CyclicDependencyError("Cyclic dependencies detected in workflow")
 
-        return sorted_nodes 
+        return sorted_nodes
