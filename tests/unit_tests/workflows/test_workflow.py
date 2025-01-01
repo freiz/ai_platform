@@ -4,7 +4,11 @@ from uuid import UUID
 import pytest
 
 from src.activities import Activity, Parameter
-from src.workflow import Workflow
+from src.workflows import (
+    Workflow,
+    NodeNotFoundError,
+    ParameterNotFoundError
+)
 
 
 class StringLengthActivity(Activity):
@@ -184,20 +188,20 @@ class TestWorkflow:
         workflow.add_node("length1", str_len, "First Length")
 
         # Test connecting non-existent nodes
-        with pytest.raises(ValueError, match="Node not found"):
+        with pytest.raises(NodeNotFoundError, match="Node not found"):
             workflow.connect_nodes("nonexistent", "output", "length1", "text")
 
-        with pytest.raises(ValueError, match="Node not found"):
+        with pytest.raises(NodeNotFoundError, match="Node not found"):
             workflow.connect_nodes("length1", "length", "nonexistent", "text")
 
         # Test connecting with invalid parameters
         upper = UppercaseActivity()
         workflow.add_node("upper1", upper, "First Uppercase")
 
-        with pytest.raises(ValueError, match="Output parameter .* not found"):
+        with pytest.raises(ParameterNotFoundError, match="Output parameter .* not found"):
             workflow.connect_nodes("upper1", "nonexistent", "length1", "text")
 
-        with pytest.raises(ValueError, match="Input parameter .* not found"):
+        with pytest.raises(ParameterNotFoundError, match="Input parameter .* not found"):
             workflow.connect_nodes("upper1", "uppercase_text", "length1", "nonexistent")
 
     def test_workflow_serialization(self):
