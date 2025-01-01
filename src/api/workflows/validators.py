@@ -4,6 +4,33 @@ from src.database.models import ActivityModel
 from .schemas import WorkflowNodeCreate, WorkflowConnectionCreate
 
 
+def has_cycle(graph: Dict[str, List[str]], node: str, visited: Set[str], path: Set[str]) -> bool:
+    """
+    Check for cycles in a directed graph using DFS.
+    
+    Args:
+        graph: Adjacency list representation of the graph
+        node: Current node being visited
+        visited: Set of all visited nodes
+        path: Set of nodes in the current DFS path
+        
+    Returns:
+        bool: True if a cycle is detected, False otherwise
+    """
+    visited.add(node)
+    path.add(node)
+
+    for neighbor in graph.get(node, []):
+        if neighbor not in visited:
+            if has_cycle(graph, neighbor, visited, path):
+                return True
+        elif neighbor in path:
+            return True
+
+    path.remove(node)
+    return False
+
+
 def validate_workflow_structure(
         nodes: Dict[str, WorkflowNodeCreate],
         connections: List[WorkflowConnectionCreate],
@@ -43,6 +70,28 @@ def validate_workflow_structure(
         f"{conn.source_node}.{conn.source_output}"
         for conn in connections
     }
+
+    # Check for multiple connections to the same input
+    input_connection_count = {}
+    for conn in connections:
+        input_key = f"{conn.target_node}.{conn.target_input}"
+        input_connection_count[input_key] = input_connection_count.get(input_key, 0) + 1
+        if input_connection_count[input_key] > 1:
+            raise ValueError(f"Multiple connections to the same input parameter: {input_key}")
+
+    # Build adjacency list for cycle detection
+    graph = {}
+    for conn in connections:
+        if conn.source_node not in graph:
+            graph[conn.source_node] = []
+        graph[conn.source_node].append(conn.target_node)
+
+    # Check each node for cycles
+    visited = set()
+    for node in nodes:
+        if node not in visited:
+            if has_cycle(graph, node, visited, set()):
+                raise ValueError("Cyclic dependency detected in workflow")
 
     # Find root and leaf nodes by analyzing connections
     target_nodes = {conn.target_node for conn in connections}
