@@ -2,7 +2,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from src.api.workflows import WorkflowNodeCreate, WorkflowConnectionCreate, validate_workflow_structure
+from src.api.workflows.schemas import WorkflowNodeCreate, WorkflowConnectionCreate
+from src.api.workflows.validators import validate_workflow_structure
 from src.database.models import ActivityModel
 
 
