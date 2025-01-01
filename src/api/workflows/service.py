@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.activities.activity_registry import ActivityRegistry
 from src.database.models import WorkflowModel, ActivityModel
-from src.workflow import Workflow
+from src.workflows import Workflow
 from .schemas import CreateWorkflowRequest, WorkflowExecuteRequest
 from .validators import validate_workflow_structure
 

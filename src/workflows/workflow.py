@@ -3,36 +3,13 @@ from typing import Dict, List, Any
 from pydantic import BaseModel, Field
 
 from src.activities import Activity
-
-
-class WorkflowNode(BaseModel):
-    """
-    Represents a node in the workflow.
-    
-    Attributes:
-        id (str): Unique identifier for this node in the workflow
-        activity (Activity): The activity instance for this node
-        label (str): User-provided label for this node
-    """
-    id: str
-    activity: Activity
-    label: str
-
-
-class Connection(BaseModel):
-    """
-    Represents a connection between two nodes in a workflow.
-    
-    Attributes:
-        source_node (str): ID of the source node
-        source_output (str): Output parameter name of the source node
-        target_node (str): ID of the target node
-        target_input (str): Input parameter name of the target node
-    """
-    source_node: str
-    source_output: str
-    target_node: str
-    target_input: str
+from .exceptions import (
+    NodeNotFoundError,
+    ParameterNotFoundError,
+    TypeMismatchError,
+    CyclicDependencyError
+)
+from .models import WorkflowNode, Connection
 
 
 class Workflow(BaseModel):
@@ -65,10 +42,10 @@ class Workflow(BaseModel):
         )
 
     def connect_nodes(self,
-                      source_node: str,
-                      source_output: str,
-                      target_node: str,
-                      target_input: str):
+                     source_node: str,
+                     source_output: str,
+                     target_node: str,
+                     target_input: str) -> None:
         """
         Connect two nodes by mapping an output to an input.
         
@@ -79,29 +56,33 @@ class Workflow(BaseModel):
             target_input (str): Input parameter name of the target node
         
         Raises:
-            ValueError: If nodes or parameters are not found
+            NodeNotFoundError: If nodes are not found
+            ParameterNotFoundError: If parameters are not found
+            TypeMismatchError: If parameter types are incompatible
         """
         # Find source and target nodes
         if source_node not in self.nodes or target_node not in self.nodes:
-            raise ValueError("Node not found")
+            raise NodeNotFoundError("Node not found")
 
         source = self.nodes[source_node].activity
         target = self.nodes[target_node].activity
 
         # Validate output and input parameters
         if source_output not in source.output_params:
-            raise ValueError(f"Output parameter {source_output} not found in source node")
+            raise ParameterNotFoundError(f"Output parameter {source_output} not found in source node")
 
         if target_input not in target.input_params:
-            raise ValueError(f"Input parameter {target_input} not found in target node")
+            raise ParameterNotFoundError(f"Input parameter {target_input} not found in target node")
 
         # Check type compatibility
         source_param = source.output_params[source_output]
         target_param = target.input_params[target_input]
 
         if source_param.type != target_param.type:
-            raise ValueError(f"Type mismatch: {source_output} ({source_param.type}) "
-                             f"cannot be connected to {target_input} ({target_param.type})")
+            raise TypeMismatchError(
+                f"Type mismatch: {source_output} ({source_param.type}) "
+                f"cannot be connected to {target_input} ({target_param.type})"
+            )
 
         # Add connection
         connection = Connection(
@@ -121,6 +102,9 @@ class Workflow(BaseModel):
         
         Returns:
             Dict[str, Dict[str, Any]]: Map of node_id to output parameters for leaf nodes
+            
+        Raises:
+            CyclicDependencyError: If cyclic dependencies are detected
         """
         # Topological sort of nodes based on connections
         sorted_nodes = self._topological_sort()
@@ -173,7 +157,7 @@ class Workflow(BaseModel):
             List[str]: Sorted list of node IDs
         
         Raises:
-            ValueError: If a cyclic dependency is detected
+            CyclicDependencyError: If a cyclic dependency is detected
         """
         # Create adjacency list and in-degree map
         graph = {node_id: [] for node_id in self.nodes}
@@ -200,6 +184,6 @@ class Workflow(BaseModel):
 
         # Check for cyclic dependencies
         if len(sorted_nodes) != len(self.nodes):
-            raise ValueError("Cyclic dependencies detected in workflow")
+            raise CyclicDependencyError("Cyclic dependencies detected in workflow")
 
-        return sorted_nodes
+        return sorted_nodes 
