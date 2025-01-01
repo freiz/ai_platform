@@ -36,13 +36,22 @@ class Parameter(BaseModel):
             "integer": int,
             "boolean": bool,
             "array": list,
-            "object": dict
+            "object": (dict, BaseModel)  # Allow both dict and Pydantic models
         }
         return type_mapping[self.type]
 
     def validate_value(self, value: Any) -> bool:
         """Validate if a value matches the parameter type."""
-        if not isinstance(value, self.python_type):
+        # For object type, allow both dict and Pydantic models
+        if self.type == "object":
+            if isinstance(value, BaseModel):
+                # Convert Pydantic model to dict for validation
+                value = value.model_dump()
+            elif not isinstance(value, dict):
+                return False
+
+        # For non-object types, check against python_type
+        elif not isinstance(value, self.python_type):
             if not (self.type == "number" and isinstance(value, (int, float))):
                 return False
 
@@ -52,12 +61,10 @@ class Parameter(BaseModel):
 
         # Validate object properties
         if self.type == "object" and self.properties is not None:
-            if not isinstance(value, dict):
-                return False
             return all(
                 prop_name in self.properties and
-                self.properties[prop_name].validate_value(prop_value)
-                for prop_name, prop_value in value.items()
+                self.properties[prop_name].validate_value(value[prop_name])
+                for prop_name in self.properties
             )
 
         return True

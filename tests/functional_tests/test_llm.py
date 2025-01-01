@@ -1,8 +1,16 @@
+from pathlib import Path
+
 from dotenv import load_dotenv
+
 from src.utils.llm import LLMConfig, LLM
 
-load_dotenv_succeeded = load_dotenv('.env')
-assert load_dotenv_succeeded
+# Get the absolute path of the project root directory
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+ENV_PATH = PROJECT_ROOT / '.env'
+
+# Load environment variables from .env file
+load_dotenv_succeeded = load_dotenv(ENV_PATH)
+assert load_dotenv_succeeded, f"Failed to load .env file from {ENV_PATH}"
 
 
 def test_call_llm():

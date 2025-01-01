@@ -3,62 +3,42 @@ from uuid import UUID
 
 import pytest
 
-from src.activities import Activity, Parameter
 from src.workflows import (
     Workflow,
     NodeNotFoundError,
     ParameterNotFoundError
 )
-
-
-class StringLengthActivity(Activity):
-    def __init__(self, activity_name: str = "string_length"):
-        input_params = {
-            'text': Parameter(name='text', type="string")
-        }
-        output_params = {
-            'length': Parameter(name='length', type="integer")
-        }
-        super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
-
-    def run(self, text):
-        return {'length': len(text)}
-
-
-class UppercaseActivity(Activity):
-    def __init__(self, activity_name: str = "uppercase"):
-        input_params = {
-            'text': Parameter(name='text', type="string")
-        }
-        output_params = {
-            'uppercase_text': Parameter(name='uppercase_text', type="string")
-        }
-        super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
-
-    def run(self, text):
-        return {'uppercase_text': text.upper()}
-
-
-class ConcatActivity(Activity):
-    def __init__(self, activity_name: str = "concat"):
-        input_params = {
-            'text1': Parameter(name='text1', type="string"),
-            'text2': Parameter(name='text2', type="string")
-        }
-        output_params = {
-            'concatenated': Parameter(name='concatenated', type="string")
-        }
-        super().__init__(activity_name=activity_name, input_params=input_params, output_params=output_params)
-
-    def run(self, text1, text2):
-        return {'concatenated': text1 + text2}
+from src.activities.activity_registry import ActivityRegistry
+from tests.shared.activities.examples import (
+    StringLengthActivity,
+    UppercaseActivity,
+    ConcatActivity
+)
 
 
 class TestWorkflow:
+    @pytest.fixture(autouse=True)
+    def setup_teardown(self):
+        """Setup and teardown for all tests in this class."""
+        # Clear registry before tests
+        ActivityRegistry.clear()
+        # Register all activities we'll use
+        ActivityRegistry.register_class(StringLengthActivity)
+        ActivityRegistry.register_class(UppercaseActivity)
+        ActivityRegistry.register_class(ConcatActivity)
+        
+        yield
+        
+        # Clear registry after tests
+        ActivityRegistry.clear()
+
     def test_single_node_workflow(self):
         """Test workflow with a single node (both root and leaf)."""
         # Create activity
-        upper = UppercaseActivity()
+        upper = ActivityRegistry.create_activity(
+            activity_type_name="uppercase",
+            params={"activity_name": "upper1"}
+        )
 
         # Create workflow with single node
         workflow = Workflow()
@@ -77,8 +57,14 @@ class TestWorkflow:
     def test_linear_workflow(self):
         """Test workflow with linear chain of nodes."""
         # Create activities
-        str_len = StringLengthActivity()
-        upper = UppercaseActivity()
+        str_len = ActivityRegistry.create_activity(
+            activity_type_name="string_length",
+            params={"activity_name": "length1"}
+        )
+        upper = ActivityRegistry.create_activity(
+            activity_type_name="uppercase",
+            params={"activity_name": "uppercase1"}
+        )
 
         # Create workflow
         workflow = Workflow()
@@ -106,9 +92,18 @@ class TestWorkflow:
     def test_multiple_root_nodes(self):
         """Test workflow with multiple root nodes feeding into a single leaf node."""
         # Create activities
-        upper1 = UppercaseActivity()
-        upper2 = UppercaseActivity()
-        concat = ConcatActivity()
+        upper1 = ActivityRegistry.create_activity(
+            activity_type_name="uppercase",
+            params={"activity_name": "upper1"}
+        )
+        upper2 = ActivityRegistry.create_activity(
+            activity_type_name="uppercase",
+            params={"activity_name": "upper2"}
+        )
+        concat = ActivityRegistry.create_activity(
+            activity_type_name="concat",
+            params={"activity_name": "concat"}
+        )
 
         # Create workflow
         workflow = Workflow()
@@ -144,9 +139,18 @@ class TestWorkflow:
     def test_multiple_leaf_nodes(self):
         """Test workflow with one root node feeding into multiple leaf nodes."""
         # Create activities
-        upper = UppercaseActivity()
-        len1 = StringLengthActivity()
-        len2 = StringLengthActivity()
+        upper = ActivityRegistry.create_activity(
+            activity_type_name="uppercase",
+            params={"activity_name": "upper"}
+        )
+        len1 = ActivityRegistry.create_activity(
+            activity_type_name="string_length",
+            params={"activity_name": "len1"}
+        )
+        len2 = ActivityRegistry.create_activity(
+            activity_type_name="string_length",
+            params={"activity_name": "len2"}
+        )
 
         # Create workflow
         workflow = Workflow()
@@ -182,7 +186,10 @@ class TestWorkflow:
 
     def test_workflow_node_validation(self):
         workflow = Workflow()
-        str_len = StringLengthActivity()
+        str_len = ActivityRegistry.create_activity(
+            activity_type_name="string_length",
+            params={"activity_name": "length1"}
+        )
 
         # Add a node
         workflow.add_node("length1", str_len, "First Length")
@@ -195,7 +202,10 @@ class TestWorkflow:
             workflow.connect_nodes("length1", "length", "nonexistent", "text")
 
         # Test connecting with invalid parameters
-        upper = UppercaseActivity()
+        upper = ActivityRegistry.create_activity(
+            activity_type_name="uppercase",
+            params={"activity_name": "upper1"}
+        )
         workflow.add_node("upper1", upper, "First Uppercase")
 
         with pytest.raises(ParameterNotFoundError, match="Output parameter .* not found"):
@@ -206,7 +216,10 @@ class TestWorkflow:
 
     def test_workflow_serialization(self):
         workflow = Workflow()
-        str_len = StringLengthActivity()
+        str_len = ActivityRegistry.create_activity(
+            activity_type_name="string_length",
+            params={"activity_name": "length1"}
+        )
         workflow.add_node("length1", str_len, "First Length")
 
         serialized = workflow.model_dump()
@@ -221,8 +234,14 @@ class TestWorkflow:
         workflow = Workflow()
 
         # Add activities as nodes
-        str_len = StringLengthActivity()
-        upper = UppercaseActivity()
+        str_len = ActivityRegistry.create_activity(
+            activity_type_name="string_length",
+            params={"activity_name": "length1"}
+        )
+        upper = ActivityRegistry.create_activity(
+            activity_type_name="uppercase",
+            params={"activity_name": "uppercase1"}
+        )
         workflow.add_node("uppercase1", upper, "First Uppercase")
         workflow.add_node("length1", str_len, "First Length")
 
@@ -236,20 +255,39 @@ class TestWorkflow:
 
         # Test serialization to JSON
         json_str = workflow.model_dump_json()
+        print("\nOriginal workflow JSON:")
+        print(json_str)
 
         # Test deserialization from JSON
         data = json.loads(json_str)
+
+        # Store activity types before serialization
+        activity_types = {
+            node_id: node.activity.__class__.__name__
+            for node_id, node in workflow.nodes.items()
+        }
 
         # Reconstruct workflow
         loaded_workflow = Workflow()
 
         # Reconstruct nodes
         for node_id, node_data in data['nodes'].items():
-            # Create appropriate activity instance
-            if "string_length" in node_data['activity']['activity_name']:
-                activity = StringLengthActivity(activity_name=node_data['activity']['activity_name'])
-            else:
-                activity = UppercaseActivity(activity_name=node_data['activity']['activity_name'])
+            print(f"\nReconstructing node {node_id}:")
+            print(f"Node data: {node_data}")
+            
+            # Get activity type based on original class
+            activity_type = "string_length" if activity_types[node_id] == "StringLengthActivity" else "uppercase"
+            
+            print(f"Activity type: {activity_type}")
+            
+            # Create activity instance through registry
+            activity = ActivityRegistry.create_activity(
+                activity_type_name=activity_type,
+                params={"activity_name": node_data['activity']['activity_name']}
+            )
+            
+            print(f"Created activity input_params: {activity.input_params}")
+            print(f"Created activity output_params: {activity.output_params}")
 
             # Set activity ID to match original
             activity.id = UUID(node_data['activity']['id'])
@@ -259,6 +297,8 @@ class TestWorkflow:
 
         # Reconstruct connections
         for conn_data in data['connections']:
+            print(f"\nReconstructing connection:")
+            print(f"Connection data: {conn_data}")
             loaded_workflow.connect_nodes(
                 conn_data['source_node'],
                 conn_data['source_output'],
@@ -270,6 +310,11 @@ class TestWorkflow:
         assert len(loaded_workflow.nodes) == len(workflow.nodes)
         for node_id, node in workflow.nodes.items():
             loaded_node = loaded_workflow.nodes[node_id]
+            print(f"\nVerifying node {node_id}:")
+            print(f"Original activity input_params: {node.activity.input_params}")
+            print(f"Original activity output_params: {node.activity.output_params}")
+            print(f"Loaded activity input_params: {loaded_node.activity.input_params}")
+            print(f"Loaded activity output_params: {loaded_node.activity.output_params}")
             assert loaded_node.label == node.label
             assert loaded_node.activity.activity_name == node.activity.activity_name
             assert loaded_node.activity.id == node.activity.id
@@ -288,6 +333,8 @@ class TestWorkflow:
         result = loaded_workflow.run({
             "uppercase1": {"text": "hello"}
         })
+        print("\nWorkflow execution result:")
+        print(result)
         assert "length1" in result
         assert result["length1"]["length"] == 5
 
