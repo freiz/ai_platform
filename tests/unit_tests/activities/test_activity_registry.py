@@ -1,9 +1,9 @@
 import pytest
 
-from src.activities.activity import Parameter
+from src.activities import Parameter
 from src.activities.activity_registry import ActivityRegistry
 from src.activities.llm_activity import LLMActivity
-from .test_activity_examples import StringLengthActivity, CustomParamsActivity
+from tests.shared.activities.examples import StringLengthActivity, CustomParamsActivity
 
 
 @pytest.fixture(autouse=True)
@@ -19,12 +19,8 @@ def setup_registry():
 
     yield
 
-
-@pytest.fixture(autouse=True)
-def clear_registry():
-    """Automatically clear the registry before each test."""
+    # Clear registry after tests
     ActivityRegistry.clear()
-    yield
 
 
 def test_fixed_params_activity():

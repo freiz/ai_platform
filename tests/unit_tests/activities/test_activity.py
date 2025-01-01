@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from src.activities import Activity, Parameter, ParamType
 from src.activities.activity_registry import ActivityRegistry
-from tests.unit_tests.activities.test_activity_examples import StringLengthActivity
+from tests.shared.activities.examples import StringLengthActivity
 
 
 @pytest.fixture(autouse=True)
