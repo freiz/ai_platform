@@ -19,12 +19,22 @@ client = TestClient(app)
 def setup_teardown():
     """Setup and teardown for each test."""
     # Store existing registrations
-    existing_registry = ActivityRegistry._registry.copy()
+    existing_types = ActivityRegistry.get_activity_types()
     # Clear for clean test
     ActivityRegistry.clear()
+
     yield
+
     # Restore original registrations
-    ActivityRegistry._registry = existing_registry
+    ActivityRegistry.clear()
+    for name, info in existing_types.items():
+        ActivityRegistry.register(
+            activity_name=info.activity_type_name,
+            activity_type=info.activity_type,
+            required_params=info.required_params,
+            description=info.description,
+            allow_custom_params=info.allow_custom_params
+        )
 
 
 def test_root():

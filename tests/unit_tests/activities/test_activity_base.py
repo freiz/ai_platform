@@ -1,31 +1,35 @@
-import pytest
-from pydantic import ValidationError
-from src.activities import Activity, Parameter, ParamType
 from typing import Any, Dict, get_args
 
+import pytest
+from pydantic import ValidationError
 
-class SampleActivity(Activity):
-    """A concrete implementation of Activity for testing."""
+from src.activities import Activity, Parameter, ParamType
+from src.activities.activity_registry import ActivityRegistry
+from tests.unit_tests.activities.test_activity_examples import StringLengthActivity
 
-    def __init__(self):
-        input_params = {
-            "text": Parameter(name="text", type="string"),
-            "count": Parameter(name="count", type="integer")
-        }
-        output_params = {
-            "result": Parameter(name="result", type="string")
-        }
-        super().__init__(activity_name="sample_activity", input_params=input_params, output_params=output_params)
 
-    def run(self, **inputs: Any) -> Dict[str, Any]:
-        text = inputs["text"]
-        count = inputs["count"]
-        return {"result": text * count}
+@pytest.fixture(autouse=True)
+def setup_teardown():
+    """Setup and teardown for all tests in this file."""
+    # Clear registry before tests
+    ActivityRegistry.clear()
+    # Register the activity for our tests
+    ActivityRegistry.register_class(StringLengthActivity)
+
+    yield
+
+    # Clear registry after tests
+    ActivityRegistry.clear()
 
 
 @pytest.fixture
 def sample_activity():
-    return SampleActivity()
+    return ActivityRegistry.create_activity(
+        activity_type_name="string_length",
+        params={
+            "activity_name": "string_length_test"
+        }
+    )
 
 
 class TestActivity(Activity):
@@ -103,20 +107,20 @@ def test_parameter_serialization():
 def test_activity_validation(sample_activity):
     """Test activity input/output validation."""
     # Test valid inputs
-    inputs = {"text": "hello", "count": 3}
+    inputs = {"text": "hello"}
     validated_inputs = sample_activity.validate_inputs(inputs)
     assert validated_inputs == inputs
 
     # Test invalid input type
     with pytest.raises(ValueError):
-        sample_activity.validate_inputs({"text": "hello", "count": "3"})  # count should be int
+        sample_activity.validate_inputs({"text": 123})  # text should be string
 
     # Test missing input
     with pytest.raises(ValueError):
-        sample_activity.validate_inputs({"text": "hello"})  # missing count
+        sample_activity.validate_inputs({})  # missing text
 
     # Test output validation
-    outputs = {"result": "hello hello hello"}
+    outputs = {"length": 5}
     validated_outputs = sample_activity.validate_outputs(outputs)
     assert validated_outputs == outputs
 
@@ -199,16 +203,16 @@ def test_nested_object_array():
 def test_activity_execution(sample_activity):
     """Test activity execution with input validation."""
     # Test valid execution
-    result = sample_activity(text="hello", count=3)
-    assert result["result"] == "hellohellohello"
+    result = sample_activity(text="hello")
+    assert result["length"] == 5
 
     # Test execution with invalid input
     with pytest.raises(ValueError):
-        sample_activity(text="hello", count="3")  # count should be int
+        sample_activity(text=123)  # text should be string
 
     # Test execution with missing input
     with pytest.raises(ValueError):
-        sample_activity(text="hello")  # missing count
+        sample_activity()  # missing text
 
 
 def test_complex_activity():
@@ -505,12 +509,12 @@ def test_parameter_model_serialization():
     json_str = nested_param.model_dump_json()
     loaded_nested = Parameter.model_validate_json(json_str)
     assert loaded_nested.model_dump() == nested_param.model_dump()
-    
+
     # Verify deep structure is preserved
     dept_items = loaded_nested.properties["departments"].items
     assert dept_items.type == "object"
     assert dept_items.properties["employees"].type == "array"
-    
+
     emp_items = dept_items.properties["employees"].items
     assert emp_items.type == "object"
     assert emp_items.properties["skills"].type == "array"

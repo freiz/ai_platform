@@ -3,7 +3,7 @@ import pytest
 from src.activities.activity import Parameter
 from src.activities.activity_registry import ActivityRegistry
 from src.activities.llm_activity import LLMActivity
-from .test_activities import StringLengthActivity, CustomParamsActivity
+from .test_activity_examples import StringLengthActivity, CustomParamsActivity
 
 
 @pytest.fixture(autouse=True)
