@@ -1,8 +1,34 @@
 from typing import Dict, List, Set, Tuple
-from uuid import UUID
 
 from src.database.models import ActivityModel
 from .schemas import WorkflowNodeCreate, WorkflowConnectionCreate
+
+
+def has_cycle(graph: Dict[str, List[str]], node: str, visited: Set[str], path: Set[str]) -> bool:
+    """
+    Check for cycles in a directed graph using DFS.
+    
+    Args:
+        graph: Adjacency list representation of the graph
+        node: Current node being visited
+        visited: Set of all visited nodes
+        path: Set of nodes in the current DFS path
+        
+    Returns:
+        bool: True if a cycle is detected, False otherwise
+    """
+    visited.add(node)
+    path.add(node)
+
+    for neighbor in graph.get(node, []):
+        if neighbor not in visited:
+            if has_cycle(graph, neighbor, visited, path):
+                return True
+        elif neighbor in path:
+            return True
+
+    path.remove(node)
+    return False
 
 
 def validate_workflow_structure(
@@ -11,7 +37,7 @@ def validate_workflow_structure(
         activities: Dict[str, ActivityModel]
 ) -> Tuple[Set[str], Set[str]]:
     """
-    Validate workflow structure including node labels, connections, and parameter types.
+    Validate workflow structure including connections and parameter types.
     
     Args:
         nodes: Map of node_id to node info
@@ -24,13 +50,6 @@ def validate_workflow_structure(
     Raises:
         ValueError: If any validation fails
     """
-    # Check for duplicate labels
-    node_labels = set()
-    for node_id, node in nodes.items():
-        if node.label in node_labels:
-            raise ValueError(f"Duplicate node label found: {node.label}")
-        node_labels.add(node.label)
-
     # If there are multiple nodes but no connections, that's an error
     if not connections and len(nodes) > 1:
         raise ValueError("Multiple nodes present but no connections between them")
@@ -44,6 +63,28 @@ def validate_workflow_structure(
         f"{conn.source_node}.{conn.source_output}"
         for conn in connections
     }
+
+    # Check for multiple connections to the same input
+    input_connection_count = {}
+    for conn in connections:
+        input_key = f"{conn.target_node}.{conn.target_input}"
+        input_connection_count[input_key] = input_connection_count.get(input_key, 0) + 1
+        if input_connection_count[input_key] > 1:
+            raise ValueError(f"Multiple connections to the same input parameter: {input_key}")
+
+    # Build adjacency list for cycle detection
+    graph = {}
+    for conn in connections:
+        if conn.source_node not in graph:
+            graph[conn.source_node] = []
+        graph[conn.source_node].append(conn.target_node)
+
+    # Check each node for cycles
+    visited = set()
+    for node in nodes:
+        if node not in visited:
+            if has_cycle(graph, node, visited, set()):
+                raise ValueError("Cyclic dependency detected in workflow")
 
     # Find root and leaf nodes by analyzing connections
     target_nodes = {conn.target_node for conn in connections}
@@ -116,4 +157,4 @@ def validate_workflow_structure(
     if disconnected_nodes and len(nodes) > 1:
         raise ValueError(f"Nodes are disconnected from the workflow: {', '.join(disconnected_nodes)}")
 
-    return root_nodes, leaf_nodes 
+    return root_nodes, leaf_nodes

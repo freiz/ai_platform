@@ -5,15 +5,20 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.activities.activity_registry import ActivityRegistry
-from src.database.models import ActivityModel
+from src.database.models import ActivityModel, ActivityOwnership, WorkflowActivityRelation, WorkflowModel
 from .schemas import CreateActivityRequest
 
 
-async def list_activities(session: AsyncSession) -> List[Dict]:
-    """List all activities."""
-    stmt = select(ActivityModel)
+async def list_activities(session: AsyncSession, user_id: str) -> List[Dict]:
+    """List all activities owned by the user."""
+    stmt = select(ActivityModel).join(
+        ActivityOwnership,
+        ActivityOwnership.activity_id == ActivityModel.id
+    ).where(ActivityOwnership.user_id == user_id)
+    
     result = await session.execute(stmt)
     activities = result.scalars().all()
 
@@ -31,8 +36,8 @@ async def list_activities(session: AsyncSession) -> List[Dict]:
     ]
 
 
-async def create_activity(request: CreateActivityRequest, session: AsyncSession) -> Dict:
-    """Create a new activity."""
+async def create_activity(request: CreateActivityRequest, user_id: str, session: AsyncSession) -> Dict:
+    """Create a new activity and assign ownership to the user."""
     # Get activity type info to verify allow_custom_params
     activity_info = ActivityRegistry().get_activity_type(request.activity_type_name)
 
@@ -65,15 +70,23 @@ async def create_activity(request: CreateActivityRequest, session: AsyncSession)
         params=request.params
     )
 
+    # Create ownership record
+    ownership = ActivityOwnership(
+        activity_id=activity.id,
+        user_id=user_id,
+        activity_name=activity.activity_name
+    )
+
     try:
-        # Save to database
+        # Save both records to database
         session.add(db_activity)
+        session.add(ownership)
         await session.commit()
     except IntegrityError:
         await session.rollback()
         raise HTTPException(
             status_code=409,  # Conflict
-            detail=f"Activity with name '{activity.activity_name}' already exists"
+            detail=f"Activity with name '{activity.activity_name}' already exists for this user"
         )
 
     # Merge activity instance fields with top-level fields
@@ -87,16 +100,22 @@ async def create_activity(request: CreateActivityRequest, session: AsyncSession)
     }
 
 
-async def get_activity(activity_id: UUID, session: AsyncSession) -> Dict:
-    """Get an activity by its ID."""
-    stmt = select(ActivityModel).where(ActivityModel.id == activity_id)
+async def get_activity(activity_id: UUID, user_id: str, session: AsyncSession) -> Dict:
+    """Get an activity by its ID if owned by the user."""
+    stmt = select(ActivityModel).join(
+        ActivityOwnership,
+        ActivityOwnership.activity_id == ActivityModel.id
+    ).where(
+        ActivityModel.id == activity_id,
+        ActivityOwnership.user_id == user_id
+    )
     result = await session.execute(stmt)
     activity = result.scalar_one_or_none()
 
     if not activity:
         raise HTTPException(
             status_code=404,
-            detail=f"Activity {activity_id} not found"
+            detail=f"Activity {activity_id} not found or not owned by user"
         )
 
     # Recreate activity instance
@@ -116,17 +135,54 @@ async def get_activity(activity_id: UUID, session: AsyncSession) -> Dict:
     }
 
 
-async def delete_activity(activity_id: UUID, session: AsyncSession) -> None:
-    """Delete an activity by its ID."""
-    stmt = select(ActivityModel).where(ActivityModel.id == activity_id)
+async def delete_activity(activity_id: UUID, user_id: str, session: AsyncSession) -> None:
+    """Delete an activity by its ID if owned by the user and not used in any workflows."""
+    # First check if activity exists and is owned by user, and load workflow relations
+    stmt = (
+        select(ActivityModel)
+        .join(
+            ActivityOwnership,
+            ActivityOwnership.activity_id == ActivityModel.id
+        )
+        .outerjoin(
+            WorkflowActivityRelation,
+            WorkflowActivityRelation.activity_id == ActivityModel.id
+        )
+        .outerjoin(
+            WorkflowModel,
+            WorkflowModel.id == WorkflowActivityRelation.workflow_id
+        )
+        .where(
+            ActivityModel.id == activity_id,
+            ActivityOwnership.user_id == user_id
+        )
+        .options(
+            selectinload(ActivityModel.workflow_relations).selectinload(WorkflowActivityRelation.workflow)
+        )
+    )
     result = await session.execute(stmt)
-    activity = result.scalar_one_or_none()
+    activity = result.unique().scalar_one_or_none()
 
     if not activity:
         raise HTTPException(
             status_code=404,
-            detail=f"Activity {activity_id} not found"
+            detail=f"Activity {activity_id} not found or not owned by user"
         )
 
-    await session.delete(activity)
+    # Check if activity is used in any workflows
+    if activity.workflow_relations:
+        # Get workflow names for better error message
+        workflow_names = [
+            relation.workflow.workflow_name
+            for relation in activity.workflow_relations
+        ]
+        raise HTTPException(
+            status_code=409,  # Conflict
+            detail=(
+                f"Cannot delete activity '{activity.activity_name}' as it is used in the following workflows: "
+                f"{', '.join(workflow_names)}"
+            )
+        )
+
+    await session.delete(activity)  # This will cascade delete the ownership record
     await session.commit() 

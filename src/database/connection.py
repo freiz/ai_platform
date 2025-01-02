@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -5,8 +6,12 @@ from sqlalchemy.pool import StaticPool
 
 from src.database.models import Base
 
-# SQLite URL for development - in memory for now
-SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+# Create data directory if it doesn't exist
+data_dir = Path("data")
+data_dir.mkdir(exist_ok=True)
+
+# SQLite URL for development - file based
+SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite:///data/dev.db"
 
 # Create async engine
 engine = create_async_engine(

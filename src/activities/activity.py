@@ -82,7 +82,9 @@ class Activity(BaseModel, ABC):
     """
     id: UUID = Field(default_factory=uuid4)
     activity_name: str
+    # noinspection PyDataclass
     input_params: Dict[str, Parameter] = Field(default_factory=dict)
+    # noinspection PyDataclass
     output_params: Dict[str, Parameter] = Field(default_factory=dict)
 
     # Class-level parameter definitions for fixed parameter activities
