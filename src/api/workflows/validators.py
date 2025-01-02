@@ -37,7 +37,7 @@ def validate_workflow_structure(
         activities: Dict[str, ActivityModel]
 ) -> Tuple[Set[str], Set[str]]:
     """
-    Validate workflow structure including node labels, connections, and parameter types.
+    Validate workflow structure including connections and parameter types.
     
     Args:
         nodes: Map of node_id to node info
@@ -50,13 +50,6 @@ def validate_workflow_structure(
     Raises:
         ValueError: If any validation fails
     """
-    # Check for duplicate labels
-    node_labels = set()
-    for node_id, node in nodes.items():
-        if node.label in node_labels:
-            raise ValueError(f"Duplicate node label found: {node.label}")
-        node_labels.add(node.label)
-
     # If there are multiple nodes but no connections, that's an error
     if not connections and len(nodes) > 1:
         raise ValueError("Multiple nodes present but no connections between them")

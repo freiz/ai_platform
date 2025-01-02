@@ -19,37 +19,11 @@ def create_mock_activity_model(input_params: dict, output_params: dict, activity
     )
 
 
-def test_validate_duplicate_labels():
-    """Test that duplicate node labels are detected."""
-    activity1_id = uuid4()
-    activity2_id = uuid4()
-    # Create two nodes with the same label
-    nodes = {
-        "node1": WorkflowNodeCreate(activity_id=activity1_id, label="Same Label"),
-        "node2": WorkflowNodeCreate(activity_id=activity2_id, label="Same Label")
-    }
-    activities = {
-        str(activity1_id): create_mock_activity_model(
-            input_params={"input1": {"type": "string"}},
-            output_params={"output1": {"type": "string"}},
-            activity_id=activity1_id
-        ),
-        str(activity2_id): create_mock_activity_model(
-            input_params={"input1": {"type": "string"}},
-            output_params={"output1": {"type": "string"}},
-            activity_id=activity2_id
-        )
-    }
-
-    with pytest.raises(ValueError, match="Duplicate node label found"):
-        validate_workflow_structure(nodes, [], activities)
-
-
 def test_validate_missing_nodes():
     """Test that missing nodes in connections are detected."""
     activity1_id = uuid4()
     nodes = {
-        "node1": WorkflowNodeCreate(activity_id=activity1_id, label="Node 1")
+        "node1": WorkflowNodeCreate(activity_id=activity1_id)
     }
     activities = {
         str(activity1_id): create_mock_activity_model(
@@ -227,8 +201,8 @@ def test_validate_valid_workflow():
     activity1_id = uuid4()
     activity2_id = uuid4()
     nodes = {
-        "node1": WorkflowNodeCreate(activity_id=activity1_id, label="Node 1"),
-        "node2": WorkflowNodeCreate(activity_id=activity2_id, label="Node 2")
+        "node1": WorkflowNodeCreate(activity_id=activity1_id),
+        "node2": WorkflowNodeCreate(activity_id=activity2_id)
     }
     activities = {
         str(activity1_id): create_mock_activity_model(
@@ -263,7 +237,7 @@ def test_validate_single_node_workflow():
     """Test that a workflow with a single node and no connections is valid."""
     activity1_id = uuid4()
     nodes = {
-        "node1": WorkflowNodeCreate(activity_id=activity1_id, label="Node 1")
+        "node1": WorkflowNodeCreate(activity_id=activity1_id)
     }
     activities = {
         str(activity1_id): create_mock_activity_model(
@@ -287,9 +261,9 @@ def test_validate_disconnected_nodes():
     activity2_id = uuid4()
     activity3_id = uuid4()
     nodes = {
-        "node1": WorkflowNodeCreate(activity_id=activity1_id, label="Node 1"),
-        "node2": WorkflowNodeCreate(activity_id=activity2_id, label="Node 2"),
-        "node3": WorkflowNodeCreate(activity_id=activity3_id, label="Node 3")  # Disconnected node
+        "node1": WorkflowNodeCreate(activity_id=activity1_id),
+        "node2": WorkflowNodeCreate(activity_id=activity2_id),
+        "node3": WorkflowNodeCreate(activity_id=activity3_id)  # Disconnected node
     }
     activities = {
         str(activity1_id): create_mock_activity_model(
@@ -327,9 +301,9 @@ def test_validate_multiple_connections_to_input():
     activity2_id = uuid4()
     activity3_id = uuid4()
     nodes = {
-        "node1": WorkflowNodeCreate(activity_id=activity1_id, label="Node 1"),
-        "node2": WorkflowNodeCreate(activity_id=activity2_id, label="Node 2"),
-        "node3": WorkflowNodeCreate(activity_id=activity3_id, label="Node 3")
+        "node1": WorkflowNodeCreate(activity_id=activity1_id),
+        "node2": WorkflowNodeCreate(activity_id=activity2_id),
+        "node3": WorkflowNodeCreate(activity_id=activity3_id)
     }
     activities = {
         str(activity1_id): create_mock_activity_model(
@@ -372,8 +346,8 @@ def test_validate_cyclic_reference():
     activity1_id = uuid4()
     activity2_id = uuid4()
     nodes = {
-        "node1": WorkflowNodeCreate(activity_id=activity1_id, label="Node 1"),
-        "node2": WorkflowNodeCreate(activity_id=activity2_id, label="Node 2")
+        "node1": WorkflowNodeCreate(activity_id=activity1_id),
+        "node2": WorkflowNodeCreate(activity_id=activity2_id)
     }
     activities = {
         str(activity1_id): create_mock_activity_model(

@@ -108,7 +108,7 @@ class WorkflowModel(Base):
     workflow_name: Mapped[str] = mapped_column(String(100))
 
     # Store workflow structure as JSON
-    nodes: Mapped[Dict[str, Dict[str, Any]]] = mapped_column(JSON)  # Map of node_id to {activity_id: UUID, label: str}
+    nodes: Mapped[Dict[str, Dict[str, Any]]] = mapped_column(JSON)  # Map of node_id to {activity_id: UUID}
     connections: Mapped[List[Dict[str, Any]]] = mapped_column(
         JSON)  # List of {source_node: str, source_output: str, target_node: str, target_input: str}
 

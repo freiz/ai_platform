@@ -10,11 +10,9 @@ class WorkflowNode(BaseModel):
     Attributes:
         id (str): Unique identifier for this node in the workflow
         activity (Activity): The activity instance for this node
-        label (str): User-provided label for this node
     """
     id: str
     activity: Activity
-    label: str
 
     class Config:
         arbitrary_types_allowed = True

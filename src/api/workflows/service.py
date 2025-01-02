@@ -15,24 +15,63 @@ from .validators import validate_workflow_structure
 
 async def list_workflows(session: AsyncSession, user_id: str) -> list[dict]:
     """List all workflows owned by the user."""
-    stmt = select(WorkflowModel).join(
-        WorkflowOwnership,
-        WorkflowOwnership.workflow_id == WorkflowModel.id
-    ).where(WorkflowOwnership.user_id == user_id)
+    # Query workflows with their activities
+    stmt = (
+        select(WorkflowModel)
+        .join(
+            WorkflowOwnership,
+            WorkflowOwnership.workflow_id == WorkflowModel.id
+        )
+        .join(
+            WorkflowActivityRelation,
+            WorkflowActivityRelation.workflow_id == WorkflowModel.id
+        )
+        .join(
+            ActivityModel,
+            ActivityModel.id == WorkflowActivityRelation.activity_id
+        )
+        .where(WorkflowOwnership.user_id == user_id)
+        .distinct()
+    )
 
     result = await session.execute(stmt)
-    workflows = result.scalars().all()
+    workflows = result.unique().scalars().all()
 
-    return [
-        {
+    # For each workflow, fetch its activities
+    workflow_list = []
+    for workflow in workflows:
+        # Get all activities used in this workflow
+        activity_stmt = (
+            select(ActivityModel)
+            .join(
+                WorkflowActivityRelation,
+                WorkflowActivityRelation.activity_id == ActivityModel.id
+            )
+            .where(WorkflowActivityRelation.workflow_id == workflow.id)
+        )
+        activity_result = await session.execute(activity_stmt)
+        activities = {
+            str(activity.id): {
+                "id": str(activity.id),
+                "activity_type": activity.activity_type_name,
+                "activity_name": activity.activity_name,
+                "input_params_schema": activity.input_params_schema,
+                "output_params_schema": activity.output_params_schema,
+                "params": activity.params
+            }
+            for activity in activity_result.scalars().all()
+        }
+
+        workflow_list.append({
             "id": str(workflow.id),
             "workflow_name": workflow.workflow_name,
             "nodes": workflow.nodes,
             "connections": workflow.connections,
-            "created_at": workflow.created_at.isoformat()
-        }
-        for workflow in workflows
-    ]
+            "created_at": workflow.created_at.isoformat(),
+            "activities": activities
+        })
+
+    return workflow_list
 
 
 async def create_workflow(
@@ -70,8 +109,7 @@ async def create_workflow(
     # Convert nodes to dictionary format
     node_dicts = {
         node_id: {
-            "activity_id": str(node.activity_id),
-            "label": node.label
+            "activity_id": str(node.activity_id)
         }
         for node_id, node in request.nodes.items()
     }
@@ -123,23 +161,25 @@ async def create_workflow(
         await session.commit()
     except IntegrityError as e:
         await session.rollback()
-        # Log the actual error for debugging
-        error_msg = str(e)
-        if "uq_user_workflow_name" in error_msg.lower():
+        error_msg = str(e).lower()
+        
+        # Handle duplicate workflow name
+        if "workflow_ownership" in error_msg and "unique constraint" in error_msg:
             raise HTTPException(
                 status_code=409,  # Conflict
-                detail=f"Workflow with name '{request.workflow_name}' already exists for this user"
+                detail=f"A workflow named '{request.workflow_name}' already exists. Please choose a different name."
             )
-        elif "uq_workflow_activity" in error_msg.lower():
+        # Handle foreign key violations
+        elif "foreign key constraint" in error_msg:
             raise HTTPException(
-                status_code=409,
-                detail=f"Duplicate activity reference in workflow"
+                status_code=400,
+                detail="One or more activities are invalid or have been deleted"
             )
+        # Generic database error
         else:
-            # For debugging, include the actual error
             raise HTTPException(
-                status_code=409,
-                detail=f"Database integrity error: {error_msg}"
+                status_code=500,
+                detail="An error occurred while creating the workflow. Please try again."
             )
 
     return {
@@ -153,12 +193,17 @@ async def create_workflow(
 
 async def get_workflow(workflow_id: UUID, user_id: str, session: AsyncSession) -> dict:
     """Get a workflow by its ID if owned by the user."""
-    stmt = select(WorkflowModel).join(
-        WorkflowOwnership,
-        WorkflowOwnership.workflow_id == WorkflowModel.id
-    ).where(
-        WorkflowModel.id == workflow_id,
-        WorkflowOwnership.user_id == user_id
+    # Query workflow with its activities
+    stmt = (
+        select(WorkflowModel)
+        .join(
+            WorkflowOwnership,
+            WorkflowOwnership.workflow_id == WorkflowModel.id
+        )
+        .where(
+            WorkflowModel.id == workflow_id,
+            WorkflowOwnership.user_id == user_id
+        )
     )
     result = await session.execute(stmt)
     workflow = result.scalar_one_or_none()
@@ -169,12 +214,35 @@ async def get_workflow(workflow_id: UUID, user_id: str, session: AsyncSession) -
             detail=f"Workflow {workflow_id} not found or not owned by user"
         )
 
+    # Get all activities used in this workflow
+    activity_stmt = (
+        select(ActivityModel)
+        .join(
+            WorkflowActivityRelation,
+            WorkflowActivityRelation.activity_id == ActivityModel.id
+        )
+        .where(WorkflowActivityRelation.workflow_id == workflow_id)
+    )
+    activity_result = await session.execute(activity_stmt)
+    activities = {
+        str(activity.id): {
+            "id": str(activity.id),
+            "activity_type": activity.activity_type_name,
+            "activity_name": activity.activity_name,
+            "input_params_schema": activity.input_params_schema,
+            "output_params_schema": activity.output_params_schema,
+            "params": activity.params
+        }
+        for activity in activity_result.scalars().all()
+    }
+
     return {
         "id": str(workflow.id),
         "workflow_name": workflow.workflow_name,
         "nodes": workflow.nodes,
         "connections": workflow.connections,
-        "created_at": workflow.created_at.isoformat()
+        "created_at": workflow.created_at.isoformat(),
+        "activities": activities
     }
 
 
@@ -263,7 +331,7 @@ async def execute_workflow(
         activity.id = UUID(node_data['activity_id'])
 
         # Add node to workflow
-        workflow.add_node(node_id, activity, node_data['label'])
+        workflow.add_node(node_id, activity)
 
     # Add connections
     for conn in workflow_model.connections:

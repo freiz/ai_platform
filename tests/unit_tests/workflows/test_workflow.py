@@ -42,7 +42,7 @@ class TestWorkflow:
 
         # Create workflow with single node
         workflow = Workflow()
-        workflow.add_node("upper1", upper, "First Uppercase")
+        workflow.add_node("upper1", upper)
 
         # Execute workflow
         result = workflow.run({
@@ -68,8 +68,8 @@ class TestWorkflow:
 
         # Create workflow
         workflow = Workflow()
-        workflow.add_node("uppercase1", upper, "First Uppercase")  # First activity
-        workflow.add_node("length1", str_len, "First Length")  # Second activity
+        workflow.add_node("uppercase1", upper)  # First activity
+        workflow.add_node("length1", str_len)  # Second activity
 
         # Connect nodes - uppercase output goes to length input
         workflow.connect_nodes(
@@ -107,9 +107,9 @@ class TestWorkflow:
 
         # Create workflow
         workflow = Workflow()
-        workflow.add_node("upper1", upper1, "First Uppercase")  # First root
-        workflow.add_node("upper2", upper2, "Second Uppercase")  # Second root
-        workflow.add_node("concat", concat, "Concatenate")  # Leaf
+        workflow.add_node("upper1", upper1)  # First root
+        workflow.add_node("upper2", upper2)  # Second root
+        workflow.add_node("concat", concat)  # Leaf
 
         # Connect nodes
         workflow.connect_nodes(
@@ -154,9 +154,9 @@ class TestWorkflow:
 
         # Create workflow
         workflow = Workflow()
-        workflow.add_node("upper", upper, "Uppercase")  # Root
-        workflow.add_node("len1", len1, "First Length")  # First leaf
-        workflow.add_node("len2", len2, "Second Length")  # Second leaf
+        workflow.add_node("upper", upper)  # Root
+        workflow.add_node("len1", len1)  # First leaf
+        workflow.add_node("len2", len2)  # Second leaf
 
         # Connect nodes
         workflow.connect_nodes(
@@ -192,7 +192,7 @@ class TestWorkflow:
         )
 
         # Add a node
-        workflow.add_node("length1", str_len, "First Length")
+        workflow.add_node("length1", str_len)
 
         # Test connecting non-existent nodes
         with pytest.raises(NodeNotFoundError, match="Node not found"):
@@ -206,7 +206,7 @@ class TestWorkflow:
             activity_type_name="uppercase",
             params={"activity_name": "upper1"}
         )
-        workflow.add_node("upper1", upper, "First Uppercase")
+        workflow.add_node("upper1", upper)
 
         with pytest.raises(ParameterNotFoundError, match="Output parameter .* not found"):
             workflow.connect_nodes("upper1", "nonexistent", "length1", "text")
@@ -220,13 +220,12 @@ class TestWorkflow:
             activity_type_name="string_length",
             params={"activity_name": "length1"}
         )
-        workflow.add_node("length1", str_len, "First Length")
+        workflow.add_node("length1", str_len)
 
         serialized = workflow.model_dump()
         assert 'nodes' in serialized
         assert len(serialized['nodes']) == 1
         assert 'length1' in serialized['nodes']
-        assert serialized['nodes']['length1']['label'] == "First Length"
 
     def test_workflow_json_serialization(self):
         """Test Workflow JSON serialization/deserialization."""
@@ -242,8 +241,8 @@ class TestWorkflow:
             activity_type_name="uppercase",
             params={"activity_name": "uppercase1"}
         )
-        workflow.add_node("uppercase1", upper, "First Uppercase")
-        workflow.add_node("length1", str_len, "First Length")
+        workflow.add_node("uppercase1", upper)
+        workflow.add_node("length1", str_len)
 
         # Add connection
         workflow.connect_nodes(
@@ -293,7 +292,7 @@ class TestWorkflow:
             activity.id = UUID(node_data['activity']['id'])
 
             # Add node to workflow
-            loaded_workflow.add_node(node_id, activity, node_data['label'])
+            loaded_workflow.add_node(node_id, activity)
 
         # Reconstruct connections
         for conn_data in data['connections']:
@@ -315,7 +314,6 @@ class TestWorkflow:
             print(f"Original activity output_params: {node.activity.output_params}")
             print(f"Loaded activity input_params: {loaded_node.activity.input_params}")
             print(f"Loaded activity output_params: {loaded_node.activity.output_params}")
-            assert loaded_node.label == node.label
             assert loaded_node.activity.activity_name == node.activity.activity_name
             assert loaded_node.activity.id == node.activity.id
             assert len(loaded_node.activity.input_params) == len(node.activity.input_params)

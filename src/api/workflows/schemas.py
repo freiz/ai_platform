@@ -6,7 +6,6 @@ from pydantic import BaseModel
 class WorkflowNodeCreate(BaseModel):
     """Request model for creating a node in the workflow API."""
     activity_id: UUID
-    label: str  # User-provided label for this instance
 
 
 class WorkflowConnectionCreate(BaseModel):

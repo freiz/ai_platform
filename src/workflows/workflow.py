@@ -29,19 +29,17 @@ class Workflow(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    def add_node(self, node_id: str, activity: Activity, label: str) -> None:
+    def add_node(self, node_id: str, activity: Activity) -> None:
         """
         Add a node to the workflow.
         
         Args:
             node_id (str): Unique identifier for this node
             activity (Activity): Activity instance for this node
-            label (str): User-provided label for this node
         """
         self.nodes[node_id] = WorkflowNode(
             id=node_id,
-            activity=activity,
-            label=label
+            activity=activity
         )
 
     def connect_nodes(self,
