@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 from src.activities import Parameter
 from src.activities.activity_registry import ActivityRegistry
-from src.activities.tool_activity import ToolActivity
+from src.activities.tools.tool_activity import ToolActivity
 
 
 @ActivityRegistry.register_activity(
