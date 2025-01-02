@@ -72,7 +72,8 @@ async def create_activity(request: CreateActivityRequest, user_id: str, session:
     # Create ownership record
     ownership = ActivityOwnership(
         activity_id=activity.id,
-        user_id=user_id
+        user_id=user_id,
+        activity_name=activity.activity_name
     )
 
     try:
@@ -84,7 +85,7 @@ async def create_activity(request: CreateActivityRequest, user_id: str, session:
         await session.rollback()
         raise HTTPException(
             status_code=409,  # Conflict
-            detail=f"Activity with name '{activity.activity_name}' already exists"
+            detail=f"Activity with name '{activity.activity_name}' already exists for this user"
         )
 
     # Merge activity instance fields with top-level fields

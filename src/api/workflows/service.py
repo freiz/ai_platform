@@ -98,7 +98,8 @@ async def create_workflow(
     # Create ownership record
     ownership = WorkflowOwnership(
         workflow_id=workflow_id,
-        user_id=user_id
+        user_id=user_id,
+        workflow_name=request.workflow_name
     )
 
     try:
@@ -110,7 +111,7 @@ async def create_workflow(
         await session.rollback()
         raise HTTPException(
             status_code=409,  # Conflict
-            detail=f"Workflow with name '{request.workflow_name}' already exists"
+            detail=f"Workflow with name '{request.workflow_name}' already exists for this user"
         )
 
     return {
