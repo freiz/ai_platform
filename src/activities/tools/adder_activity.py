@@ -1,8 +1,8 @@
 from typing import Any, Dict
 
-from src.activities import Activity
 from src.activities import Parameter
 from src.activities.activity_registry import ActivityRegistry
+from src.activities.tools.tool_activity import ToolActivity
 
 
 @ActivityRegistry.register_activity(
@@ -13,7 +13,7 @@ from src.activities.activity_registry import ActivityRegistry
     },
     allow_custom_params=False
 )
-class AdderActivity(Activity):
+class AdderActivity(ToolActivity):
     # Define fixed parameters at class level
     fixed_input_params = {
         'num1': Parameter(name='num1', type="number"),

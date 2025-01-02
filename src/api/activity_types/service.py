@@ -3,8 +3,8 @@ from typing import Dict
 from fastapi import HTTPException
 
 from src.activities.activity_registry import ActivityRegistry, ActivityTypeInfo
-from src.activities.adder_activity import AdderActivity
-from src.activities.llm_activity import LLMActivity
+from src.activities import AdderActivity
+from src.activities import LLMActivity
 
 
 def register_activities() -> None:

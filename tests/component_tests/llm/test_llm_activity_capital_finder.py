@@ -8,7 +8,7 @@ from src.activities.activity_registry import ActivityRegistry
 from src.utils.llm import LLMConfig
 
 # Get the absolute path of the project root directory
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 ENV_PATH = PROJECT_ROOT / '.env'
 
 # Load environment variables from .env file
