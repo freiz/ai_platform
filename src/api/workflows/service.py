@@ -104,7 +104,13 @@ async def create_workflow(
         activities[str(node.activity_id)] = activity
 
     # Validate workflow structure
-    validate_workflow_structure(request.nodes, request.connections, activities)
+    try:
+        validate_workflow_structure(request.nodes, request.connections, activities)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
 
     # Convert nodes to dictionary format
     node_dicts = {
