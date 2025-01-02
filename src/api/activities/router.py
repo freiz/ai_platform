@@ -35,7 +35,7 @@ async def list_activities_endpoint(
         List of activities
     """
     try:
-        return await list_activities(session)
+        return await list_activities(session, str(user_id))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -61,7 +61,7 @@ async def create_activity_endpoint(
     """
     try:
         # Create activity and save to database
-        response_data = await create_activity(request, session)
+        response_data = await create_activity(request, str(user_id), session)
 
         # Set Location header
         response.headers["Location"] = f"/users/{user_id}/activities/{response_data['id']}"
@@ -94,7 +94,7 @@ async def get_activity_endpoint(
         The activity if found
     """
     try:
-        return await get_activity(activity_id, session)
+        return await get_activity(activity_id, str(user_id), session)
     except HTTPException:
         raise
     except Exception as e:
@@ -119,7 +119,7 @@ async def delete_activity_endpoint(
         No content on success
     """
     try:
-        await delete_activity(activity_id, session)
+        await delete_activity(activity_id, str(user_id), session)
         return None
     except HTTPException:
         raise

@@ -7,13 +7,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.activities.activity_registry import ActivityRegistry
-from src.database.models import ActivityModel
+from src.database.models import ActivityModel, ActivityOwnership
 from .schemas import CreateActivityRequest
 
 
-async def list_activities(session: AsyncSession) -> List[Dict]:
-    """List all activities."""
-    stmt = select(ActivityModel)
+async def list_activities(session: AsyncSession, user_id: str) -> List[Dict]:
+    """List all activities owned by the user."""
+    stmt = select(ActivityModel).join(
+        ActivityOwnership,
+        ActivityOwnership.activity_id == ActivityModel.id
+    ).where(ActivityOwnership.user_id == user_id)
+    
     result = await session.execute(stmt)
     activities = result.scalars().all()
 
@@ -31,8 +35,8 @@ async def list_activities(session: AsyncSession) -> List[Dict]:
     ]
 
 
-async def create_activity(request: CreateActivityRequest, session: AsyncSession) -> Dict:
-    """Create a new activity."""
+async def create_activity(request: CreateActivityRequest, user_id: str, session: AsyncSession) -> Dict:
+    """Create a new activity and assign ownership to the user."""
     # Get activity type info to verify allow_custom_params
     activity_info = ActivityRegistry().get_activity_type(request.activity_type_name)
 
@@ -65,9 +69,16 @@ async def create_activity(request: CreateActivityRequest, session: AsyncSession)
         params=request.params
     )
 
+    # Create ownership record
+    ownership = ActivityOwnership(
+        activity_id=activity.id,
+        user_id=user_id
+    )
+
     try:
-        # Save to database
+        # Save both records to database
         session.add(db_activity)
+        session.add(ownership)
         await session.commit()
     except IntegrityError:
         await session.rollback()
@@ -87,16 +98,22 @@ async def create_activity(request: CreateActivityRequest, session: AsyncSession)
     }
 
 
-async def get_activity(activity_id: UUID, session: AsyncSession) -> Dict:
-    """Get an activity by its ID."""
-    stmt = select(ActivityModel).where(ActivityModel.id == activity_id)
+async def get_activity(activity_id: UUID, user_id: str, session: AsyncSession) -> Dict:
+    """Get an activity by its ID if owned by the user."""
+    stmt = select(ActivityModel).join(
+        ActivityOwnership,
+        ActivityOwnership.activity_id == ActivityModel.id
+    ).where(
+        ActivityModel.id == activity_id,
+        ActivityOwnership.user_id == user_id
+    )
     result = await session.execute(stmt)
     activity = result.scalar_one_or_none()
 
     if not activity:
         raise HTTPException(
             status_code=404,
-            detail=f"Activity {activity_id} not found"
+            detail=f"Activity {activity_id} not found or not owned by user"
         )
 
     # Recreate activity instance
@@ -116,17 +133,23 @@ async def get_activity(activity_id: UUID, session: AsyncSession) -> Dict:
     }
 
 
-async def delete_activity(activity_id: UUID, session: AsyncSession) -> None:
-    """Delete an activity by its ID."""
-    stmt = select(ActivityModel).where(ActivityModel.id == activity_id)
+async def delete_activity(activity_id: UUID, user_id: str, session: AsyncSession) -> None:
+    """Delete an activity by its ID if owned by the user."""
+    stmt = select(ActivityModel).join(
+        ActivityOwnership,
+        ActivityOwnership.activity_id == ActivityModel.id
+    ).where(
+        ActivityModel.id == activity_id,
+        ActivityOwnership.user_id == user_id
+    )
     result = await session.execute(stmt)
     activity = result.scalar_one_or_none()
 
     if not activity:
         raise HTTPException(
             status_code=404,
-            detail=f"Activity {activity_id} not found"
+            detail=f"Activity {activity_id} not found or not owned by user"
         )
 
-    await session.delete(activity)
+    await session.delete(activity)  # This will cascade delete the ownership record
     await session.commit() 

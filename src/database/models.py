@@ -2,8 +2,8 @@ from datetime import datetime, UTC
 from typing import Dict, Any, List
 from uuid import UUID
 
-from sqlalchemy import JSON, DateTime, String, UniqueConstraint
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import JSON, DateTime, String, UniqueConstraint, ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -29,6 +29,14 @@ class ActivityModel(Base):
     output_params_schema: Mapped[Dict] = mapped_column(JSON)  # Parameter definitions
     params: Mapped[Dict[str, Any]] = mapped_column(JSON)  # Creation parameters
 
+    # Relationships
+    ownership: Mapped["ActivityOwnership"] = relationship(
+        "ActivityOwnership",
+        back_populates="activity",
+        cascade="all, delete-orphan",
+        uselist=False
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -46,6 +54,34 @@ class ActivityModel(Base):
             f"type={self.activity_type_name}, "
             f"name={self.activity_name})"
         )
+
+
+class ActivityOwnership(Base):
+    """SQLAlchemy model for storing activity ownership."""
+    __tablename__ = "activity_ownership"
+    __table_args__ = (
+        UniqueConstraint('activity_id', 'user_id', name='uq_activity_user'),
+    )
+
+    # Composite primary key using activity_id and user_id
+    activity_id: Mapped[UUID] = mapped_column(ForeignKey("activities.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+
+    # Relationships
+    activity: Mapped["ActivityModel"] = relationship(
+        "ActivityModel",
+        back_populates="ownership",
+        single_parent=True
+    )
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC)
+    )
+
+    def __repr__(self) -> str:
+        return f"ActivityOwnership(activity_id={self.activity_id}, user_id={self.user_id})"
 
 
 class WorkflowModel(Base):
