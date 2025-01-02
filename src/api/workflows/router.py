@@ -35,7 +35,7 @@ async def list_workflows_endpoint(
     Returns:
         List of workflows with their nodes and connections
     """
-    return await list_workflows(session)
+    return await list_workflows(session, str(user_id))
 
 
 @router.post("", status_code=201)
@@ -56,7 +56,7 @@ async def create_workflow_endpoint(
         The created workflow instance with its ID
     """
     workflow_id = uuid4()
-    workflow = await create_workflow(workflow_id, request, session)
+    workflow = await create_workflow(workflow_id, request, str(user_id), session)
     return workflow
 
 
@@ -77,7 +77,7 @@ async def get_workflow_endpoint(
     Returns:
         The workflow if found
     """
-    return await get_workflow(workflow_id, session)
+    return await get_workflow(workflow_id, str(user_id), session)
 
 
 @router.delete("/{workflow_id}", status_code=204)
@@ -97,7 +97,7 @@ async def delete_workflow_endpoint(
     Returns:
         No content on success
     """
-    await delete_workflow(workflow_id, session)
+    await delete_workflow(workflow_id, str(user_id), session)
     return None
 
 
@@ -120,4 +120,4 @@ async def execute_workflow_endpoint(
     Returns:
         The outputs from all leaf nodes
     """
-    return await execute_workflow(workflow_id, request, session) 
+    return await execute_workflow(workflow_id, str(user_id), request, session) 

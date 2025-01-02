@@ -7,15 +7,19 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.activities.activity_registry import ActivityRegistry
-from src.database.models import WorkflowModel, ActivityModel
+from src.database.models import WorkflowModel, ActivityModel, WorkflowOwnership, ActivityOwnership
 from src.workflows import Workflow
 from .schemas import CreateWorkflowRequest, WorkflowExecuteRequest
 from .validators import validate_workflow_structure
 
 
-async def list_workflows(session: AsyncSession) -> list[dict]:
-    """List all workflows with their details."""
-    stmt = select(WorkflowModel)
+async def list_workflows(session: AsyncSession, user_id: str) -> list[dict]:
+    """List all workflows owned by the user."""
+    stmt = select(WorkflowModel).join(
+        WorkflowOwnership,
+        WorkflowOwnership.workflow_id == WorkflowModel.id
+    ).where(WorkflowOwnership.user_id == user_id)
+
     result = await session.execute(stmt)
     workflows = result.scalars().all()
 
@@ -34,20 +38,27 @@ async def list_workflows(session: AsyncSession) -> list[dict]:
 async def create_workflow(
         workflow_id: UUID,
         request: CreateWorkflowRequest,
+        user_id: str,
         session: AsyncSession
 ) -> dict:
-    """Create a new workflow."""
+    """Create a new workflow and assign ownership to the user."""
     # Verify all activities exist and load them
     activities = {}
     for node_id, node in request.nodes.items():
-        # Check activity exists
-        stmt = select(ActivityModel).where(ActivityModel.id == node.activity_id)
+        # Check activity exists and user owns it
+        stmt = select(ActivityModel).join(
+            ActivityOwnership,
+            ActivityOwnership.activity_id == ActivityModel.id
+        ).where(
+            ActivityModel.id == node.activity_id,
+            ActivityOwnership.user_id == user_id
+        )
         result = await session.execute(stmt)
         activity = result.scalar_one_or_none()
         if not activity:
             raise HTTPException(
                 status_code=404,
-                detail=f"Activity {node.activity_id} not found"
+                detail=f"Activity {node.activity_id} not found or not owned by user"
             )
 
         # Store activity for validation using activity ID as key
@@ -84,9 +95,16 @@ async def create_workflow(
         connections=connection_dicts
     )
 
+    # Create ownership record
+    ownership = WorkflowOwnership(
+        workflow_id=workflow_id,
+        user_id=user_id
+    )
+
     try:
-        # Save to database
+        # Save both records to database
         session.add(db_workflow)
+        session.add(ownership)
         await session.commit()
     except IntegrityError:
         await session.rollback()
@@ -104,16 +122,22 @@ async def create_workflow(
     }
 
 
-async def get_workflow(workflow_id: UUID, session: AsyncSession) -> dict:
-    """Get a workflow by its ID."""
-    stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
+async def get_workflow(workflow_id: UUID, user_id: str, session: AsyncSession) -> dict:
+    """Get a workflow by its ID if owned by the user."""
+    stmt = select(WorkflowModel).join(
+        WorkflowOwnership,
+        WorkflowOwnership.workflow_id == WorkflowModel.id
+    ).where(
+        WorkflowModel.id == workflow_id,
+        WorkflowOwnership.user_id == user_id
+    )
     result = await session.execute(stmt)
     workflow = result.scalar_one_or_none()
 
     if not workflow:
         raise HTTPException(
             status_code=404,
-            detail=f"Workflow {workflow_id} not found"
+            detail=f"Workflow {workflow_id} not found or not owned by user"
         )
 
     return {
@@ -125,37 +149,50 @@ async def get_workflow(workflow_id: UUID, session: AsyncSession) -> dict:
     }
 
 
-async def delete_workflow(workflow_id: UUID, session: AsyncSession) -> None:
-    """Delete a workflow by its ID."""
-    stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
+async def delete_workflow(workflow_id: UUID, user_id: str, session: AsyncSession) -> None:
+    """Delete a workflow by its ID if owned by the user."""
+    stmt = select(WorkflowModel).join(
+        WorkflowOwnership,
+        WorkflowOwnership.workflow_id == WorkflowModel.id
+    ).where(
+        WorkflowModel.id == workflow_id,
+        WorkflowOwnership.user_id == user_id
+    )
     result = await session.execute(stmt)
     workflow = result.scalar_one_or_none()
 
     if not workflow:
         raise HTTPException(
             status_code=404,
-            detail=f"Workflow {workflow_id} not found"
+            detail=f"Workflow {workflow_id} not found or not owned by user"
         )
 
-    await session.delete(workflow)
+    await session.delete(workflow)  # This will cascade delete the ownership record
     await session.commit()
 
 
 async def execute_workflow(
         workflow_id: UUID,
+        user_id: str,
         request: WorkflowExecuteRequest,
         session: AsyncSession
 ) -> Dict[str, Any]:
-    """Execute a workflow with the given input values."""
-    # Query the workflow
-    stmt = select(WorkflowModel).where(WorkflowModel.id == workflow_id)
+    """Execute a workflow with the given input values if owned by the user."""
+    # Query the workflow with ownership check
+    stmt = select(WorkflowModel).join(
+        WorkflowOwnership,
+        WorkflowOwnership.workflow_id == WorkflowModel.id
+    ).where(
+        WorkflowModel.id == workflow_id,
+        WorkflowOwnership.user_id == user_id
+    )
     result = await session.execute(stmt)
     workflow_model = result.scalar_one_or_none()
 
     if not workflow_model:
         raise HTTPException(
             status_code=404,
-            detail=f"Workflow {workflow_id} not found"
+            detail=f"Workflow {workflow_id} not found or not owned by user"
         )
 
     # Create workflow instance
@@ -163,20 +200,26 @@ async def execute_workflow(
 
     # Load activities and create nodes
     for node_id, node_data in workflow_model.nodes.items():
-        # Get activity model
-        stmt = select(ActivityModel).where(ActivityModel.id == UUID(node_data['activity_id']))
+        # Get activity model with ownership check
+        stmt = select(ActivityModel).join(
+            ActivityOwnership,
+            ActivityOwnership.activity_id == ActivityModel.id
+        ).where(
+            ActivityModel.id == UUID(node_data['activity_id']),
+            ActivityOwnership.user_id == user_id
+        )
         result = await session.execute(stmt)
         activity_model = result.scalar_one_or_none()
         if not activity_model:
             raise HTTPException(
                 status_code=404,
-                detail=f"Activity {node_data['activity_id']} not found"
+                detail=f"Activity {node_data['activity_id']} not found or not owned by user"
             )
 
         # Create activity instance
         activity_class = ActivityRegistry.get_activity_class(activity_model.activity_type_name)
         activity_type_info = ActivityRegistry.get_activity_type(activity_model.activity_type_name)
-        
+
         # Only pass input/output params if activity allows custom params
         activity_params = {
             "activity_name": activity_model.activity_name,
@@ -186,7 +229,7 @@ async def execute_workflow(
                 "input_params": activity_model.input_params_schema,
                 "output_params": activity_model.output_params_schema
             })
-        
+
         activity = activity_class(**activity_params)
         activity.id = UUID(node_data['activity_id'])
 
@@ -209,4 +252,4 @@ async def execute_workflow(
         raise HTTPException(
             status_code=400,
             detail=f"Workflow execution failed: {str(e)}"
-        ) 
+        )
