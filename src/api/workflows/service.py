@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.activities.activity_registry import ActivityRegistry
-from src.database.models import WorkflowModel, ActivityModel, WorkflowOwnership, ActivityOwnership
+from src.database.models import WorkflowModel, ActivityModel, WorkflowOwnership, ActivityOwnership, WorkflowActivityRelation
 from src.workflows import Workflow
 from .schemas import CreateWorkflowRequest, WorkflowExecuteRequest
 from .validators import validate_workflow_structure
@@ -102,17 +102,45 @@ async def create_workflow(
         workflow_name=request.workflow_name
     )
 
+    # Create activity relations (deduplicated)
+    unique_activity_ids = {
+        node.activity_id
+        for node in request.nodes.values()
+    }
+    activity_relations = [
+        WorkflowActivityRelation(
+            workflow_id=workflow_id,
+            activity_id=activity_id
+        )
+        for activity_id in unique_activity_ids
+    ]
+
     try:
-        # Save both records to database
+        # Save all records to database
         session.add(db_workflow)
         session.add(ownership)
+        session.add_all(activity_relations)
         await session.commit()
-    except IntegrityError:
+    except IntegrityError as e:
         await session.rollback()
-        raise HTTPException(
-            status_code=409,  # Conflict
-            detail=f"Workflow with name '{request.workflow_name}' already exists for this user"
-        )
+        # Log the actual error for debugging
+        error_msg = str(e)
+        if "uq_user_workflow_name" in error_msg.lower():
+            raise HTTPException(
+                status_code=409,  # Conflict
+                detail=f"Workflow with name '{request.workflow_name}' already exists for this user"
+            )
+        elif "uq_workflow_activity" in error_msg.lower():
+            raise HTTPException(
+                status_code=409,
+                detail=f"Duplicate activity reference in workflow"
+            )
+        else:
+            # For debugging, include the actual error
+            raise HTTPException(
+                status_code=409,
+                detail=f"Database integrity error: {error_msg}"
+            )
 
     return {
         "id": str(workflow_id),

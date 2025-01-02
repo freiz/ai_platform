@@ -5,9 +5,10 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.activities.activity_registry import ActivityRegistry
-from src.database.models import ActivityModel, ActivityOwnership
+from src.database.models import ActivityModel, ActivityOwnership, WorkflowActivityRelation, WorkflowModel
 from .schemas import CreateActivityRequest
 
 
@@ -135,21 +136,52 @@ async def get_activity(activity_id: UUID, user_id: str, session: AsyncSession) -
 
 
 async def delete_activity(activity_id: UUID, user_id: str, session: AsyncSession) -> None:
-    """Delete an activity by its ID if owned by the user."""
-    stmt = select(ActivityModel).join(
-        ActivityOwnership,
-        ActivityOwnership.activity_id == ActivityModel.id
-    ).where(
-        ActivityModel.id == activity_id,
-        ActivityOwnership.user_id == user_id
+    """Delete an activity by its ID if owned by the user and not used in any workflows."""
+    # First check if activity exists and is owned by user, and load workflow relations
+    stmt = (
+        select(ActivityModel)
+        .join(
+            ActivityOwnership,
+            ActivityOwnership.activity_id == ActivityModel.id
+        )
+        .outerjoin(
+            WorkflowActivityRelation,
+            WorkflowActivityRelation.activity_id == ActivityModel.id
+        )
+        .outerjoin(
+            WorkflowModel,
+            WorkflowModel.id == WorkflowActivityRelation.workflow_id
+        )
+        .where(
+            ActivityModel.id == activity_id,
+            ActivityOwnership.user_id == user_id
+        )
+        .options(
+            selectinload(ActivityModel.workflow_relations).selectinload(WorkflowActivityRelation.workflow)
+        )
     )
     result = await session.execute(stmt)
-    activity = result.scalar_one_or_none()
+    activity = result.unique().scalar_one_or_none()
 
     if not activity:
         raise HTTPException(
             status_code=404,
             detail=f"Activity {activity_id} not found or not owned by user"
+        )
+
+    # Check if activity is used in any workflows
+    if activity.workflow_relations:
+        # Get workflow names for better error message
+        workflow_names = [
+            relation.workflow.workflow_name
+            for relation in activity.workflow_relations
+        ]
+        raise HTTPException(
+            status_code=409,  # Conflict
+            detail=(
+                f"Cannot delete activity '{activity.activity_name}' as it is used in the following workflows: "
+                f"{', '.join(workflow_names)}"
+            )
         )
 
     await session.delete(activity)  # This will cascade delete the ownership record

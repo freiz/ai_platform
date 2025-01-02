@@ -33,6 +33,11 @@ class ActivityModel(Base):
         cascade="all, delete-orphan",
         uselist=False
     )
+    workflow_relations: Mapped[List["WorkflowActivityRelation"]] = relationship(
+        "WorkflowActivityRelation",
+        back_populates="activity",
+        cascade="all, delete-orphan"
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -114,6 +119,11 @@ class WorkflowModel(Base):
         cascade="all, delete-orphan",
         uselist=False
     )
+    activity_relations: Mapped[List["WorkflowActivityRelation"]] = relationship(
+        "WorkflowActivityRelation",
+        back_populates="workflow",
+        cascade="all, delete-orphan"
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -167,3 +177,34 @@ class WorkflowOwnership(Base):
 
     def __repr__(self) -> str:
         return f"WorkflowOwnership(workflow_id={self.workflow_id}, user_id={self.user_id})"
+
+
+class WorkflowActivityRelation(Base):
+    """SQLAlchemy model for tracking which activities are used in which workflows."""
+    __tablename__ = "workflow_activity_relations"
+    __table_args__ = (
+        UniqueConstraint('workflow_id', 'activity_id', name='uq_workflow_activity'),
+    )
+
+    # Composite primary key
+    workflow_id: Mapped[UUID] = mapped_column(ForeignKey("workflows.id", ondelete="CASCADE"), primary_key=True)
+    activity_id: Mapped[UUID] = mapped_column(ForeignKey("activities.id"), primary_key=True)  # No cascade delete
+
+    # Relationships
+    workflow: Mapped["WorkflowModel"] = relationship(
+        "WorkflowModel",
+        back_populates="activity_relations"
+    )
+    activity: Mapped["ActivityModel"] = relationship(
+        "ActivityModel",
+        back_populates="workflow_relations"
+    )
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC)
+    )
+
+    def __repr__(self) -> str:
+        return f"WorkflowActivityRelation(workflow={self.workflow_id}, activity={self.activity_id})"
