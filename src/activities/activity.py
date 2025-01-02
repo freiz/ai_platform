@@ -94,7 +94,7 @@ class Activity(BaseModel, ABC):
     class Config:
         arbitrary_types_allowed = True
 
-    def __init__(self, activity_name: str, input_params: Optional[Dict[str, Parameter]] = None, 
+    def __init__(self, activity_name: str, input_params: Optional[Dict[str, Parameter]] = None,
                  output_params: Optional[Dict[str, Parameter]] = None, **kwargs):
         """
         Initialize an activity with its parameters.

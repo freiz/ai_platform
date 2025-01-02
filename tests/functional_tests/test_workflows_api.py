@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from tests.functional_tests.conftest import BASE_URL
+from .conftest import BASE_URL
 
 
 @pytest.fixture
