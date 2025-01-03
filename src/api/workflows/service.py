@@ -320,20 +320,10 @@ async def execute_workflow(
             )
 
         # Create activity instance
-        activity_class = ActivityRegistry.get_activity_class(activity_model.activity_type_name)
-        activity_type_info = ActivityRegistry.get_activity_type(activity_model.activity_type_name)
-
-        # Only pass input/output params if activity allows custom params
-        activity_params = {
-            "activity_name": activity_model.activity_name,
-        }
-        if activity_type_info.allow_custom_params:
-            activity_params.update({
-                "input_params": activity_model.input_params_schema,
-                "output_params": activity_model.output_params_schema
-            })
-
-        activity = activity_class(**activity_params)
+        activity = ActivityRegistry().create_activity(
+            activity_type_name=activity_model.activity_type_name,
+            params=activity_model.params
+        )
         activity.id = UUID(node_data['activity_id'])
 
         # Add node to workflow
