@@ -2,9 +2,8 @@ from typing import Dict
 
 from fastapi import HTTPException
 
+from src.activities import AdderActivity, LLMActivity, FreightQuoteActivity
 from src.activities.activity_registry import ActivityRegistry, ActivityTypeInfo
-from src.activities import AdderActivity
-from src.activities import LLMActivity
 
 
 def register_activities() -> None:
@@ -12,6 +11,7 @@ def register_activities() -> None:
     try:
         ActivityRegistry.register_class(LLMActivity)
         ActivityRegistry.register_class(AdderActivity)
+        ActivityRegistry.register_class(FreightQuoteActivity)
     except ValueError as e:
         # If already registered, we can ignore
         if "already registered" not in str(e):
@@ -56,4 +56,4 @@ def get_activity_type(activity_type_name: str) -> ActivityTypeInfo:
     try:
         return ActivityRegistry().get_activity_type(activity_type_name)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) 
+        raise HTTPException(status_code=404, detail=str(e))
