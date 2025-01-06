@@ -2,7 +2,9 @@
 
 ## Setup Environment
 
-1. Create `.env` file under project root with `OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>`
+1. Create `.env` file under project root with 
+   * `OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>`
+   * `TRUCKQUOTE_API_KEY=<YOUR_TRUCKQUOTE_AIP_KEY>`
 2. Install Dependencies
 
 ``` bash
@@ -12,8 +14,9 @@ pip install -r requirements.txt
 ## Run the App
 
 ``` bash
-uvicorn src.api.main:app --reload --port 8000
+uvicorn src.api.main:app --port 8000
 ```
+(--autoreload is not recommended, I met multiple bugs)
 
 ## Run Tests
 
