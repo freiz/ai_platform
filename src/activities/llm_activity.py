@@ -31,7 +31,7 @@ class LLMActivity(Activity):
         llm = LLM(self.llm_config)
         llm_str_response = llm.complete(system_message, user_message)
         # Only keep the JSON content, consider using regex later
-        llm_str_response = llm_str_response.replace('```', '').replace('```json', '')
+        llm_str_response = llm_str_response.replace('```json', '').replace('```', '')
         llm_response = self._parse_json(llm_str_response)
 
         return llm_response
@@ -68,7 +68,7 @@ class LLMActivity(Activity):
             return outputs
 
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON response: {str(e)}")
+            raise ValueError(f"Invalid JSON response: {str(e)}, raw response: {json_str}")
 
     def _create_output_json_schema(self) -> str:
         def _process_parameter(param, indent_level=1) -> tuple[str, str]:
